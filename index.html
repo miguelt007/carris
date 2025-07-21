@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- Plugin para rotação de marcadores -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-rotatedmarker/0.2.0/leaflet.rotatedMarker.min.js"></script>
+
+    <title>Mapa de Veículos da Carris Metropolitana</title>
+
+    <!-- Importa Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="background-color:powderblue;">Autocarros da Carris Metropolitana em Tempo Real</h1>
+	<td>
+	    <script src="https://cdn.logwork.com/widget/text.js"></script>
+        <a href="https://logwork.com/current-time-in-oeiras-portugal-lisboa" class="clock-widget-text" data-width="130" data-timezone="Europe/Lisbon" data-language="pt">Oeiras, Portugal</a></body>
+	</td>
+	<td>
+		<script src="https://cdn.logwork.com/widget/text.js"></script>
+		<a href="https://logwork.com/current-time-in-madrid-spain" class="clock-widget-text" data-width="130" data-timezone="Europe/Madrid" data-language="pt">Madrid, Spain</a></body>
+	</td>
+	<td>
+		<script src="https://cdn.logwork.com/widget/text.js"></script>
+		<a href="https://logwork.com/current-time-in-paris-france" class="clock-widget-text" data-width="130" data-timezone="Europe/Paris" data-language="pt">Paris, France</a></body>
+	</td>
+    <td>
+		<script src="https://cdn.logwork.com/widget/text.js"></script>
+        <a href="https://logwork.com/current-time-in-new-york-united-states" class="clock-widget-text" data-width="130" data-timezone="America/New_York" data-language="pt">New York, United States</a>
+	</td>
+    <td>
+        <a class="weatherwidget-io" href="https://forecast7.com/en/38d70n9d31/oeiras/" data-label_1="OEIRAS" data-label_2="WEATHER" data-theme="original">OEIRAS WEATHER</a>
+        <script>
+        !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src='https://weatherwidget.io/js/widget.min.js';fjs.parentNode.insertBefore(js,fjs);}}(document,'script','weatherwidget-io-js');
+        </script> 
+    </td><br>
+    <div id="map"></div>
+
+    <!-- Importa Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+	
+    <!-- Biblioteca Axios para requisições API -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        // Cria o mapa e define a visualização inicial
+        var map = L.map('map').setView([38.736946, -9.142685], 12); // Coordenadas para Lisboa
+		
+        // Adiciona as tiles do OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Adicionar marker das paragens
+        const marker= L.marker([38.6944902, -9.3084604])
+        marker.addTo(map)
+        
+        
+		// Define o novo ícone personalizado
+        var customIcon = L.icon({
+        iconUrl: 'https://pgavirtual.com/carris/icons/bus_1.png', // Substitua pela URL do seu ícone
+        iconSize: [20, 20], // Tamanho do ícone (largura, altura)
+        iconAnchor: [0, 0], // Âncora do ícone (onde ele será posicionado no ponto)
+        popupAnchor: [3, 3] // Âncora do popup em relação ao ícone
+        
+        });
+
+        // Função para obter dados da API
+        function getTransportData() {
+            axios.get('https://api.carrismetropolitana.pt/vehicles')
+            .then(function (response) {
+				console.log(response.data); // Adiciona este log para ver os dados da API
+                var vehicles = response.data;
+
+                // Limpa os marcadores anteriores
+                map.eachLayer(function (layer) {
+                    if (layer instanceof L.Marker) {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                // Itera sobre os dados dos veículos
+                vehicles.forEach(function(vehicle) {
+                    var lat = vehicle.lat;
+                    var lon = vehicle.lon;
+					var bearing = vehicle.bearing; // Direção do veículo (em graus)
+                    
+                    // Adiciona um marcador no mapa para cada veículo
+                    L.marker([lat, lon], {icon:customIcon}, {bearing: bearing}).addTo(map)
+					   .bindPopup('<b>Veículo ID:</b> ' + vehicle.id + '<br><b>Rumo:</b> ' + vehicle.bearing + '<br><b>Linha:</b> ' + vehicle.line_id + '<br><b>Rota:</b> ' + vehicle.route_id + '<br><b>Velocidade:</b> ' + vehicle.speed + '<br><b>Status:</b> ' + vehicle.current_status);
+						
+                });
+            })
+            .catch(function (error) {
+                console.error('Erro ao obter dados da API:', error);
+            });
+        }
+
+        // Chama a função uma vez para obter os dados ao carregar a página
+        getTransportData();
+
+        // Atualiza os dados a cada 2 segundos para refletir as mudanças em tempo real
+        setInterval(getTransportData, 2000);
+    </script>
+
+</body>
+</html>
