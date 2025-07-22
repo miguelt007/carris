@@ -79,8 +79,8 @@
         for (const veiculo of veiculos) {
           const {
             lat, lon, id, line, speed,
-            heading, status, trip_id,
-            pattern_id, timestamp
+            heading, status, pattern_id,
+            timestamp
           } = veiculo;
 
           if (lat && lon) {
@@ -104,22 +104,22 @@
               🚌 <strong>Autocarro ${id}</strong><br>
               Linha: ${line || "desconhecida"}<br>
               Velocidade: ${speed} km/h<br>
-              Direção: ${isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
+              Direção: ${typeof heading === "number" && isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
               Estado: ${traduzirStatus(status)}<br>
               Percurso: ${pattern_id}<br>
               Atualização: ${new Date(timestamp).toLocaleTimeString("pt-PT")}<br>
             `;
 
             const patternInfo = await obterPatternInfo(pattern_id);
-            if (patternInfo && patternInfo.headsign) {
+            if (patternInfo?.headsign) {
               popupHtml += `<br><strong>Destino:</strong> ${patternInfo.headsign}<br>`;
             }
 
-            if (patternInfo && patternInfo.path) {
+            if (patternInfo?.path) {
               const paragens = patternInfo.path
                 .map(p => p.stop?.name)
                 .filter(Boolean)
-                .slice(0, 5); // mostra só as 5 primeiras
+                .slice(0, 5);
               popupHtml += `<br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}`;
             }
 
