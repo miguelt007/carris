@@ -91,7 +91,7 @@
               🚌 <strong>Autocarro ${id}</strong><br>
               Linha: ${line || "desconhecida"}<br>
               Velocidade: ${speed} km/h<br>
-              Direção: ${Math.round(heading)}°<br>
+              Direção: ${isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
               Viagem: ${trip_id}<br>
               Percurso: ${pattern_id}<br>
               Atualização: ${new Date(timestamp).toLocaleTimeString("pt-PT")}<br>
