@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapa Carris Metropolitana</title>
+  <title>Tracking Carris Metropolitana</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
   <style>
     html, body {
@@ -180,14 +180,14 @@
 
           marcador.bindPopup(`
             🚌 <strong>Autocarro ${id}</strong><br>
-            Linha: ${line_id}<br>
-            Destino: ${headsign}<br>
-            Velocidade: ${velocidadeKmH} km/h<br>
-            Direção: ${direcao}<br>
-            Estado: ${estado}<br>
-            Atualização: ${hora}<br>
-            Tempo estimado até próxima paragem: ${tempoEstimado}<br>
-            <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
+            <b>Linha:</b> ${line_id}<br>
+            <b>Destino:</b> ${headsign}<br>
+            <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
+            <b>Direção:</b> ${direcao}<br>
+            <b>Estado:</b> ${estado}<br>
+            <b>Atualização:</b> ${hora}<br>
+            <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
+            <br><strong><b>Próximas paragens:</b></strong><br>${paragens.join("<br>")}
           `);
         });
       } catch (error) {
