@@ -37,13 +37,14 @@
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Ícone personalizado de autocarro urbano visto de cima (gerado e alojado)
+    // Ícone realista de autocarro urbano visto de cima com fundo transparente
     const iconeAutocarro = L.icon({
-  iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11562896756ifkgek2ydy.png",
-  iconSize: [24, 24],         // Ajusta conforme necessário
-  iconAnchor: [16, 16],        // Centro do ícone para posicionamento correto
-  popupAnchor: [0, -10]        // Onde aparece o balão de info
-});
+      iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11562896756ifkgek2ydy.png",
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -10]
+    });
+
     let marcadores = new Map();
 
     function calcularAngulo(lat1, lon1, lat2, lon2) {
@@ -77,7 +78,6 @@
               icon: iconeAutocarro
             }).addTo(map);
 
-            // Aplicar rotação com plugin
             marcador.setRotationAngle(angulo);
             marcador.setRotationOrigin("center");
 
@@ -86,7 +86,7 @@
           }
         });
 
-        // Remover os que já não existem
+        // Remover marcadores antigos
         marcadores.forEach((valor, chave) => {
           if (!novosMarcadores.has(chave)) {
             map.removeLayer(valor.marker);
