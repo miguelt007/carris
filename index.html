@@ -37,9 +37,9 @@
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Ícone realista de autocarro urbano visto de cima com fundo transparente
+    // Ícone personalizado de autocarro urbano amarelo visto de cima
     const iconeAutocarro = L.icon({
-      iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11562896756ifkgek2ydy.png",
+      iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Bus_icon_top_view_yellow.png/512px-Bus_icon_top_view_yellow.png",
       iconSize: [32, 32],
       iconAnchor: [16, 16],
       popupAnchor: [0, -10]
@@ -86,7 +86,7 @@
           }
         });
 
-        // Remover marcadores antigos
+        // Remover autocarros desaparecidos
         marcadores.forEach((valor, chave) => {
           if (!novosMarcadores.has(chave)) {
             map.removeLayer(valor.marker);
