@@ -29,13 +29,6 @@
       popupAnchor: [0, -10]
     });
 
-    const iconeParado = L.icon({
-      iconUrl: "https://miguelt007.github.io/carris/bus_stopped.png",
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-      popupAnchor: [0, -10]
-    });
-
     function traduzirStatus(status) {
       switch (status) {
         case "INCOMING_AT": return "A chegar à paragem";
@@ -105,7 +98,6 @@
           if (!lat || !lon) return;
 
           const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
-          const estaParado = speed === 0 || velocidadeKmH < 2;
           const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
           const estado = traduzirStatus(current_status);
           const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
@@ -120,7 +112,7 @@
           }
 
           const marcador = new L.Marker([lat, lon], {
-            icon: estaParado ? iconeParado : iconeAutocarro
+            icon: iconeAutocarro
           }).addTo(map);
 
           marcador.setRotationAngle(bearing);
