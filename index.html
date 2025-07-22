@@ -60,7 +60,7 @@
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
         const resposta = await response.json();
-        const veiculos = Array.isArray(resposta.data) ? resposta.data : []; // ✅ Verificação segura
+        const veiculos = Array.isArray(resposta.data) ? resposta.data : [];
 
         const novosMarcadores = new Map();
 
