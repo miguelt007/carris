@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
-  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     crossorigin="anonymous"
   />
-
   <style>
     #map {
       height: 100vh;
@@ -22,14 +20,12 @@
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin="anonymous"
   ></script>
 
   <script>
-    // Inicializar mapa centrado em Lisboa
     const map = L.map("map").setView([38.736946, -9.142685], 12);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -41,23 +37,16 @@
     async function carregarAutocarros() {
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
-        const json = await response.json();
+        const veiculos = await response.json();
 
-        // Ver estrutura da resposta
-        console.log("Resposta da API:", json);
+        console.log("Dados recebidos:", veiculos);
 
         // Limpar marcadores anteriores
         marcadores.forEach(m => map.removeLayer(m));
         marcadores = [];
 
-        // Usar os dados corretos (ajuste conforme estrutura real)
-        const veiculos = json.data || json.vehicles || [];
-
         veiculos.forEach(veiculo => {
-          // Tenta detectar latitude, longitude e ID com fallback
-          const lat = veiculo.latitude || veiculo.lat;
-          const lon = veiculo.longitude || veiculo.lon;
-          const id = veiculo.vehicleId || veiculo.id || "Desconhecido";
+          const { lat, lon, id } = veiculo;
 
           if (lat && lon) {
             const marcador = L.marker([lat, lon])
@@ -68,17 +57,14 @@
         });
 
         if (veiculos.length === 0) {
-          console.log("Nenhum veículo disponível no momento.");
+          console.log("Nenhum veículo ativo no momento.");
         }
       } catch (error) {
         console.error("Erro ao carregar os autocarros:", error);
       }
     }
 
-    // Carregamento inicial
     carregarAutocarros();
-
-    // Atualização automática
     setInterval(carregarAutocarros, 30000);
   </script>
 </body>
