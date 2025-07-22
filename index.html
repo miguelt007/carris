@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
-  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     crossorigin="anonymous"
   />
-
   <style>
     #map {
       height: 100vh;
@@ -22,27 +20,25 @@
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin="anonymous"
   ></script>
 
   <script>
-    // Inicializar o mapa centrado em Lisboa
     const map = L.map("map").setView([38.736946, -9.142685], 12);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Ícone personalizado de autocarro
+    // Ícone realista de autocarro urbano visto de cima
     const iconeAutocarro = L.icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/685/685655.png", // ícone real de autocarro
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-  popupAnchor: [0, -10]
-});
+      iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11563209357gqv7zjv1xv.png",
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -10]
+    });
 
     let marcadores = [];
 
@@ -53,7 +49,6 @@
 
         console.log("Dados recebidos:", veiculos);
 
-        // Remover marcadores anteriores
         marcadores.forEach(m => map.removeLayer(m));
         marcadores = [];
 
@@ -72,10 +67,7 @@
       }
     }
 
-    // Carregamento inicial
     carregarAutocarros();
-
-    // Atualizar a cada 30 segundos
     setInterval(carregarAutocarros, 30000);
   </script>
 </body>
