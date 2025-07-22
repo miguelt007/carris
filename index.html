@@ -103,7 +103,7 @@
             let popupHtml = `
               🚌 <strong>Autocarro ${id}</strong><br>
               Linha: ${line || "desconhecida"}<br>
-              Velocidade: ${speed} km/h<br>
+              Velocidade: ${speed > 0 ? speed + " km/h" : "Parado"}<br>
               Direção: ${typeof heading === "number" && isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
               Estado: ${traduzirStatus(status)}<br>
               Percurso: ${pattern_id}<br>
