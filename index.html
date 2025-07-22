@@ -66,10 +66,7 @@
 
         for (const veiculo of veiculos) {
           const {
-            lat, lon, id, line_id, speed,
-            bearing, current_status, pattern_id,
-            timestamp
-          } = veiculo;
+            lat, lon, id, line_id, speed, bearing, current_status, pattern_id, timestamp } = veiculo;
 
           if (lat && lon) {
             const anterior = marcadores.get(id);
