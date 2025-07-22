@@ -45,6 +45,19 @@
       }
     }
 
+    function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
     const cachePatterns = new Map();
 
     async function obterInfoPercurso(pattern_id) {
@@ -57,13 +70,15 @@
         if (!resposta.ok) throw new Error("Erro ao obter percurso");
         const dados = await resposta.json();
         const headsign = dados?.headsign || "não disponível";
-        const paragens = dados?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
-        const info = { headsign, paragens };
+        const path = dados?.path || [];
+        const paragens = path.map(p => p.stop?.name).filter(Boolean).slice(0, 5);
+        const proximaParagem = path.find(p => p.stop?.lat && p.stop?.lon)?.stop || null;
+        const info = { headsign, paragens, proximaParagem };
         cachePatterns.set(pattern_id, info);
         return info;
       } catch (error) {
         console.warn("Percurso não disponível:", error);
-        const info = { headsign: "não disponível", paragens: [] };
+        const info = { headsign: "não disponível", paragens: [], proximaParagem: null };
         cachePatterns.set(pattern_id, info);
         return info;
       }
@@ -89,15 +104,19 @@
 
           if (!lat || !lon) return;
 
-          // Filtro por linha (exemplo: só mostrar linha 207)
-          // if (line_id !== "207") return;
-
           const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
           const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
           const estado = traduzirStatus(current_status);
           const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
 
-          const { headsign, paragens } = await obterInfoPercurso(pattern_id);
+          const { headsign, paragens, proximaParagem } = await obterInfoPercurso(pattern_id);
+
+          let tempoEstimado = "não disponível";
+          if (proximaParagem && velocidadeKmH > 0) {
+            const distKm = calcularDistanciaKm(lat, lon, proximaParagem.lat, proximaParagem.lon);
+            const minutos = Math.round((distKm / velocidadeKmH) * 60);
+            tempoEstimado = `${minutos} min`;
+          }
 
           const marcador = new L.Marker([lat, lon], {
             icon: velocidadeKmH > 0 ? iconeAutocarro : iconeParado
@@ -115,6 +134,7 @@
             Estado: ${estado}<br>
             Percurso: ${pattern_id}<br>
             Atualização: ${hora}<br>
+            Tempo estimado até próxima paragem: ${tempoEstimado}<br>
             <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
           `);
         });
