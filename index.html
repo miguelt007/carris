@@ -29,24 +29,25 @@
       popupAnchor: [0, -10]
     });
 
-    const iconeUtilizador = L.icon({
+  const iconeUtilizador = L.icon({
   iconUrl: "https://miguelt007.github.io/carris/ponto_preto.png",
   iconSize: [16, 16],
   iconAnchor: [8, 8]
 });
 
-    let marcadorUtilizador;
+let marcadorUtilizador;
 
-    navigator.geolocation.watchPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      if (!marcadorUtilizador) {
-        marcadorUtilizador = L.marker([latitude, longitude], {
-          icon: iconeUtilizador
-        }).addTo(map);
-      } else {
-        marcadorUtilizador.setLatLng([latitude, longitude]);
-      }
-    });
+navigator.geolocation.watchPosition((pos) => {
+  const { latitude, longitude } = pos.coords;
+  if (!marcadorUtilizador) {
+    marcadorUtilizador = L.marker([latitude, longitude], {
+      icon: iconeUtilizador
+    }).addTo(map);
+  } else {
+    marcadorUtilizador.setLatLng([latitude, longitude]);
+  }
+});
+
 
     function traduzirStatus(status) {
       switch (status) {
