@@ -38,9 +38,9 @@
 
     function traduzirStatus(status) {
       switch (status) {
-        case "in_service": return "Em serviço";
-        case "layover": return "Em pausa";
-        case "out_of_service": return "Fora de serviço";
+        case "INCOMING_AT": return "A chegar à paragem";
+        case "STOPPED_AT": return "Parado na paragem";
+        case "IN_TRANSIT_TO": return "Em trânsito";
         default: return "Desconhecido";
       }
     }
@@ -59,17 +59,18 @@
     async function carregarAutocarros() {
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
-        const veiculos = await response.json();
+        const resposta = await response.json();
+        const veiculos = resposta.data;
         const novosMarcadores = new Map();
 
         for (const veiculo of veiculos) {
           const {
-            lat, lon, id, line, speed,
-            heading, status, pattern_id,
+            lat, lon, id, line_id, speed,
+            bearing, current_status, pattern_id,
             timestamp
           } = veiculo;
 
-          console.log(`Autocarro ${id} → heading:`, heading, "| status:", status);
+          console.log(`Autocarro ${id} → bearing:`, bearing, "| current_status:", current_status);
 
           if (lat && lon) {
             const anterior = marcadores.get(id);
@@ -89,21 +90,22 @@
             marcador.setRotationOrigin("center");
 
             const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
+            const direcao = typeof bearing === "number" && isFinite(bearing) ? Math.round(bearing) + "°" : "não disponível";
+            const estado = current_status !== undefined ? traduzirStatus(current_status) : "não disponível";
 
             const patternInfo = await obterPatternInfo(pattern_id);
-            const linha = patternInfo?.line_id || line || "desconhecida";
             const destino = patternInfo?.headsign || "não disponível";
             const paragens = patternInfo?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
 
             let popupHtml = `
               🚌 <strong>Autocarro ${id}</strong><br>
-              Linha: ${linha}<br>
+              Linha: ${line_id}<br>
               Destino: ${destino}<br>
               Velocidade: ${velocidadeKmH > 0 ? velocidadeKmH + " km/h" : "Parado"}<br>
-              Direção: ${typeof heading === "number" && isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
-              Estado: ${traduzirStatus(status)}<br>
+              Direção: ${direcao}<br>
+              Estado: ${estado}<br>
               Percurso: ${pattern_id}<br>
-              Atualização: ${new Date(timestamp).toLocaleTimeString("pt-PT")}<br>
+              Atualização: ${new Date(timestamp * 1000).toLocaleTimeString("pt-PT")}<br>
               <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
             `;
 
