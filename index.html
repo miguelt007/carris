@@ -3,21 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapa Carris Metropolitana - Simulado</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    crossorigin="anonymous"
-  />
+  <title>Mapa Carris Metropolitana</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
   <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-    }
-    #map {
-      height: 100%;
-      width: 100%;
-    }
+    html, body { margin: 0; height: 100%; }
+    #map { height: 100%; width: 100%; }
   </style>
 </head>
 <body>
@@ -25,24 +15,18 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
   <script>
-    const map = L.map("map").setView([38.736946, -9.142685], 12);
+    const map = L.map("map").setView([38.736946, -9.142685], 11);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Simulação de um autocarro ativo
-    const autocarroSimulado = {
-      id: "sim|999",
-      lat: 38.7369,
-      lon: -9.1427,
-      line_id: "4000",
-      speed: 12.5,
-      bearing: 82,
-      current_status: "IN_TRANSIT_TO",
-      pattern_id: "4000_0_1",
-      timestamp: Math.floor(Date.now() / 1000)
-    };
+    const iconeAutocarro = L.icon({
+      iconUrl: "https://miguelt007.github.io/carris/bus.png",
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -10]
+    });
 
     function traduzirStatus(status) {
       switch (status) {
@@ -53,27 +37,46 @@
       }
     }
 
-    const {
-      lat, lon, id, line_id, speed,
-      bearing, current_status, pattern_id,
-      timestamp
-    } = autocarroSimulado;
+    async function carregarAutocarros() {
+      try {
+        const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
+        const resposta = await response.json();
+        const veiculos = Array.isArray(resposta.data) ? resposta.data : [];
 
-    const velocidadeKmH = Math.round(speed * 3.6);
-    const direcao = Math.round(bearing) + "°";
-    const estado = traduzirStatus(current_status);
-    const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
+        console.log("Veículos recebidos:", veiculos);
 
-    const marcador = L.marker([lat, lon]).addTo(map);
-    marcador.bindPopup(`
-      🚌 <strong>Autocarro ${id}</strong><br>
-      Linha: ${line_id}<br>
-      Velocidade: ${velocidadeKmH} km/h<br>
-      Direção: ${direcao}<br>
-      Estado: ${estado}<br>
-      Percurso: ${pattern_id}<br>
-      Atualização: ${hora}
-    `);
+        veiculos.forEach(veiculo => {
+          const {
+            lat, lon, id, line_id, speed,
+            bearing, current_status, pattern_id,
+            timestamp
+          } = veiculo;
+
+          if (!lat || !lon) return;
+
+          const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
+          const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
+          const estado = traduzirStatus(current_status);
+          const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
+
+          const marcador = L.marker([lat, lon], { icon: iconeAutocarro }).addTo(map);
+          marcador.bindPopup(`
+            🚌 <strong>Autocarro ${id}</strong><br>
+            Linha: ${line_id}<br>
+            Velocidade: ${velocidadeKmH} km/h<br>
+            Direção: ${direcao}<br>
+            Estado: ${estado}<br>
+            Percurso: ${pattern_id}<br>
+            Atualização: ${hora}
+          `);
+        });
+      } catch (error) {
+        console.error("Erro ao carregar autocarros:", error);
+      }
+    }
+
+    carregarAutocarros();
+    setInterval(carregarAutocarros, 30000);
   </script>
 </body>
 </html>
