@@ -4,26 +4,30 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
+  
+  <!-- Folha de estilo do Leaflet sem 'integrity' -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-o3xZRv+VwraAwlQinKqjMoDa+C5PQyPZ+edvB0B1Lvs="
-    crossorigin=""
+    crossorigin="anonymous"
   />
+  
   <style>
     #map {
       height: 100vh;
+      width: 100%;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Script do Leaflet sem 'integrity' -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44c="
-    crossorigin=""
+    crossorigin="anonymous"
   ></script>
+
   <script>
     const map = L.map("map").setView([38.736946, -9.142685], 12); // Lisboa como centro
 
@@ -36,15 +40,18 @@
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
         const json = await response.json();
 
+        // Remover marcadores existentes
+        marcadores.forEach(m => map.removeLayer(m));
+        marcadores = [];
+
         json.vehicles.forEach(veiculo => {
-          const lat = veiculo.latitude;
-          const lon = veiculo.longitude;
-          const id = veiculo.vehicleId;
+          const { latitude: lat, longitude: lon, vehicleId: id } = veiculo;
 
           if (lat && lon) {
-            L.marker([lat, lon])
+            const marcador = L.marker([lat, lon])
               .addTo(map)
               .bindPopup(`🚌 Autocarro ${id}`);
+            marcadores.push(marcador);
           }
         });
       } catch (error) {
@@ -52,15 +59,14 @@
       }
     }
 
+    // Array para guardar marcadores
+    let marcadores = [];
+
+    // Carregar inicialmente
     carregarAutocarros();
 
-    // Atualiza a cada 30 segundos
-    setInterval(() => {
-      map.eachLayer(layer => {
-        if (layer instanceof L.Marker) map.removeLayer(layer);
-      });
-      carregarAutocarros();
-    }, 30000);
+    // Atualizar a cada 30 segundos
+    setInterval(carregarAutocarros, 30000);
   </script>
 </body>
 </html>
