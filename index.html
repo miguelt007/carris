@@ -3,80 +3,49 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapa Carris Metropolitana</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+  <title>Diagnóstico Carris API</title>
   <style>
-    html, body { margin: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
+    body {
+      font-family: monospace;
+      background-color: #f0f0f0;
+      padding: 1rem;
+      color: #333;
+    }
+    pre {
+      background: #fff;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <h1>Resposta da API Carris Metropolitana</h1>
+  <pre id="output">A carregar...</pre>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
   <script>
-    const map = L.map("map").setView([38.736946, -9.142685], 11);
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map);
-
-    const iconeAutocarro = L.icon({
-      iconUrl: "https://miguelt007.github.io/carris/bus.png",
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-      popupAnchor: [0, -10]
-    });
-
-    function traduzirStatus(status) {
-      switch (status) {
-        case "INCOMING_AT": return "A chegar à paragem";
-        case "STOPPED_AT": return "Parado na paragem";
-        case "IN_TRANSIT_TO": return "Em trânsito";
-        default: return "Desconhecido";
-      }
-    }
-
-    async function carregarAutocarros() {
+    async function mostrarResposta() {
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
+        const status = response.status;
         const resposta = await response.json();
-        const veiculos = Array.isArray(resposta.data) ? resposta.data : [];
 
-        console.log("Veículos recebidos:", veiculos);
+        const output = {
+          "Código HTTP": status,
+          "Status da API": resposta.status,
+          "Timestamp": resposta.timestamp,
+          "Número de veículos": Array.isArray(resposta.data) ? resposta.data.length : "não é array",
+          "Exemplo de veículo": Array.isArray(resposta.data) && resposta.data.length > 0 ? resposta.data[0] : "Sem veículos",
+          "Resposta completa": resposta
+        };
 
-        veiculos.forEach(veiculo => {
-          const {
-            lat, lon, id, line_id, speed,
-            bearing, current_status, pattern_id,
-            timestamp
-          } = veiculo;
-
-          if (!lat || !lon) return;
-
-          const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
-          const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
-          const estado = traduzirStatus(current_status);
-          const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
-
-          const marcador = L.marker([lat, lon], { icon: iconeAutocarro }).addTo(map);
-          marcador.bindPopup(`
-            🚌 <strong>Autocarro ${id}</strong><br>
-            Linha: ${line_id}<br>
-            Velocidade: ${velocidadeKmH} km/h<br>
-            Direção: ${direcao}<br>
-            Estado: ${estado}<br>
-            Percurso: ${pattern_id}<br>
-            Atualização: ${hora}
-          `);
-        });
+        document.getElementById("output").textContent = JSON.stringify(output, null, 2);
       } catch (error) {
-        console.error("Erro ao carregar autocarros:", error);
+        document.getElementById("output").textContent = "Erro ao obter dados:\n" + error;
       }
     }
 
-    carregarAutocarros();
-    setInterval(carregarAutocarros, 30000);
+    mostrarResposta();
   </script>
 </body>
 </html>
