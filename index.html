@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     crossorigin="anonymous"
   />
+
   <style>
     #map {
       height: 100vh;
@@ -20,17 +22,27 @@
 <body>
   <div id="map"></div>
 
+  <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin="anonymous"
   ></script>
 
   <script>
+    // Inicializar o mapa centrado em Lisboa
     const map = L.map("map").setView([38.736946, -9.142685], 12);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
+
+    // Ícone personalizado de autocarro
+    const iconeAutocarro = L.icon({
+      iconUrl: "https://cdn-icons-png.flaticon.com/32/61/61240.png", // 32x32 ícone autocarro
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+      popupAnchor: [0, -10]
+    });
 
     let marcadores = [];
 
@@ -41,30 +53,29 @@
 
         console.log("Dados recebidos:", veiculos);
 
-        // Limpar marcadores anteriores
+        // Remover marcadores anteriores
         marcadores.forEach(m => map.removeLayer(m));
         marcadores = [];
 
         veiculos.forEach(veiculo => {
-          const { lat, lon, id } = veiculo;
+          const { lat, lon, id, line } = veiculo;
 
           if (lat && lon) {
-            const marcador = L.marker([lat, lon])
+            const marcador = L.marker([lat, lon], { icon: iconeAutocarro })
               .addTo(map)
-              .bindPopup(`🚌 Autocarro ${id}`);
+              .bindPopup(`🚌 Autocarro ${id}<br>Linha: ${line || "desconhecida"}`);
             marcadores.push(marcador);
           }
         });
-
-        if (veiculos.length === 0) {
-          console.log("Nenhum veículo ativo no momento.");
-        }
       } catch (error) {
         console.error("Erro ao carregar os autocarros:", error);
       }
     }
 
+    // Carregamento inicial
     carregarAutocarros();
+
+    // Atualizar a cada 30 segundos
     setInterval(carregarAutocarros, 30000);
   </script>
 </body>
