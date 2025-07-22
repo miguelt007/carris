@@ -60,7 +60,7 @@
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
         const resposta = await response.json();
-        const veiculos = resposta.data;
+        const veiculos = resposta.data; // ✅ Correção aqui
         const novosMarcadores = new Map();
 
         for (const veiculo of veiculos) {
@@ -69,8 +69,6 @@
             bearing, current_status, pattern_id,
             timestamp
           } = veiculo;
-
-          console.log(`Autocarro ${id} → bearing:`, bearing, "| current_status:", current_status);
 
           if (lat && lon) {
             const anterior = marcadores.get(id);
