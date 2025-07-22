@@ -68,7 +68,7 @@
         const novosMarcadores = new Map();
 
         for (const veiculo of veiculos) {
-          const { lat, lon, id, line, speed, heading, trip_id, pattern_id, timestamp } = veiculo;
+          const { lat, lon, id, line, speed, heading, trip_id, pattern_id, timestamp, status } = veiculo;
 
           if (lat && lon) {
             const anterior = marcadores.get(id);
