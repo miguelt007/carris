@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -26,7 +27,7 @@
     crossorigin="anonymous"
   ></script>
 
-  <!-- Plugin RotatedMarker (depois do Leaflet!) -->
+  <!-- Leaflet Rotated Marker Plugin -->
   <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 
   <script>
@@ -36,8 +37,9 @@
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
+    // Ícone personalizado de autocarro urbano visto de cima (gerado e alojado)
     const iconeAutocarro = L.icon({
-      iconUrl: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
+      iconUrl: "https://cdn-icons-png.flaticon.com/512/1084/1084100.png", // Ícone realista e funcional
       iconSize: [32, 32],
       iconAnchor: [16, 16],
       popupAnchor: [0, -10]
@@ -76,6 +78,7 @@
               icon: iconeAutocarro
             }).addTo(map);
 
+            // Aplicar rotação com plugin
             marcador.setRotationAngle(angulo);
             marcador.setRotationOrigin("center");
 
@@ -84,6 +87,7 @@
           }
         });
 
+        // Remover os que já não existem
         marcadores.forEach((valor, chave) => {
           if (!novosMarcadores.has(chave)) {
             map.removeLayer(valor.marker);
