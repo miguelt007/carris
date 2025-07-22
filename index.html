@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
-  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -27,8 +26,8 @@
     crossorigin="anonymous"
   ></script>
 
-  <!-- Leaflet Rotated Marker Plugin -->
-  <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@0.2.0/leaflet.rotatedMarker.js"></script>
+  <!-- Plugin RotatedMarker (depois do Leaflet!) -->
+  <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 
   <script>
     const map = L.map("map").setView([38.736946, -9.142685], 12);
@@ -37,9 +36,8 @@
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Ícone realista de autocarro urbano visto de cima
     const iconeAutocarro = L.icon({
-      iconUrl: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png", // ícone funcional
+      iconUrl: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
       iconSize: [32, 32],
       iconAnchor: [16, 16],
       popupAnchor: [0, -10]
@@ -74,18 +72,18 @@
               map.removeLayer(anterior.marker);
             }
 
-            const marcador = L.rotatedMarker([lat, lon], {
-              icon: iconeAutocarro,
-              rotationAngle: angulo,
-              rotationOrigin: "center"
-            }).addTo(map)
-              .bindPopup(`🚌 Autocarro ${id}<br>Linha: ${line || "desconhecida"}`);
+            const marcador = new L.Marker([lat, lon], {
+              icon: iconeAutocarro
+            }).addTo(map);
 
+            marcador.setRotationAngle(angulo);
+            marcador.setRotationOrigin("center");
+
+            marcador.bindPopup(`🚌 Autocarro ${id}<br>Linha: ${line || "desconhecida"}`);
             novosMarcadores.set(id, { lat, lon, marker: marcador });
           }
         });
 
-        // Remover marcadores antigos que não estão na nova lista
         marcadores.forEach((valor, chave) => {
           if (!novosMarcadores.has(chave)) {
             map.removeLayer(valor.marker);
