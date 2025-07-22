@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mapa de Autocarros - Carris Metropolitana</title>
 
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -20,10 +21,14 @@
 <body>
   <div id="map"></div>
 
+  <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin="anonymous"
   ></script>
+
+  <!-- Leaflet Rotated Marker Plugin -->
+  <script src="https://rawcdn.githack.com/bbecquet/Leaflet.RotatedMarker/master/leaflet.rotatedMarker.js"></script>
 
   <script>
     const map = L.map("map").setView([38.736946, -9.142685], 12);
@@ -34,34 +39,59 @@
 
     // Ícone realista de autocarro urbano visto de cima
     const iconeAutocarro = L.icon({
-      iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11563209357gqv7zjv1xv.png",
+      iconUrl: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
       iconSize: [32, 32],
       iconAnchor: [16, 16],
       popupAnchor: [0, -10]
     });
 
-    let marcadores = [];
+    let marcadores = new Map();
+
+    function calcularAngulo(lat1, lon1, lat2, lon2) {
+      const dy = lat2 - lat1;
+      const dx = lon2 - lon1;
+      const rad = Math.atan2(dy, dx);
+      return (rad * 180) / Math.PI;
+    }
 
     async function carregarAutocarros() {
       try {
         const response = await fetch("https://api.carrismetropolitana.pt/vehicles");
         const veiculos = await response.json();
 
-        console.log("Dados recebidos:", veiculos);
-
-        marcadores.forEach(m => map.removeLayer(m));
-        marcadores = [];
+        const novosMarcadores = new Map();
 
         veiculos.forEach(veiculo => {
           const { lat, lon, id, line } = veiculo;
 
           if (lat && lon) {
-            const marcador = L.marker([lat, lon], { icon: iconeAutocarro })
-              .addTo(map)
+            const anterior = marcadores.get(id);
+            let angulo = 0;
+
+            if (anterior) {
+              const { lat: latAnt, lon: lonAnt } = anterior;
+              angulo = calcularAngulo(latAnt, lonAnt, lat, lon);
+              map.removeLayer(anterior.marker);
+            }
+
+            const marcador = L.rotatedMarker([lat, lon], {
+              icon: iconeAutocarro,
+              rotationAngle: angulo
+            }).addTo(map)
               .bindPopup(`🚌 Autocarro ${id}<br>Linha: ${line || "desconhecida"}`);
-            marcadores.push(marcador);
+
+            novosMarcadores.set(id, { lat, lon, marker: marcador });
           }
         });
+
+        // Remover marcadores antigos que não estão na nova lista
+        marcadores.forEach((valor, chave) => {
+          if (!novosMarcadores.has(chave)) {
+            map.removeLayer(valor.marker);
+          }
+        });
+
+        marcadores = novosMarcadores;
       } catch (error) {
         console.error("Erro ao carregar os autocarros:", error);
       }
