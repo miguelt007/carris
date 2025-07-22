@@ -39,13 +39,11 @@
 
     // Ícone personalizado de autocarro urbano visto de cima (gerado e alojado)
     const iconeAutocarro = L.icon({
-  iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11562896756ifkgek2ydy.png", // substitui com o URL do ficheiro que tu alojaste
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -10]
+  iconUrl: "https://toppng.com/uploads/preview/bus-top-view-clip-art-bus-icon-top-view-11562896756ifkgek2ydy.png",
+  iconSize: [24, 24],         // Ajusta conforme necessário
+  iconAnchor: [16, 16],        // Centro do ícone para posicionamento correto
+  popupAnchor: [0, -10]        // Onde aparece o balão de info
 });
-
-
     let marcadores = new Map();
 
     function calcularAngulo(lat1, lon1, lat2, lon2) {
