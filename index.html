@@ -92,7 +92,7 @@
               Linha: ${line || "desconhecida"}<br>
               Velocidade: ${speed} km/h<br>
               Direção: ${isFinite(heading) ? Math.round(heading) + "°" : "desconhecida"}<br>
-              Viagem: ${trip_id}<br>
+              Estado: ${status || "desconhecido"}<br>
               Percurso: ${pattern_id}<br>
               Atualização: ${new Date(timestamp).toLocaleTimeString("pt-PT")}<br>
             `;
