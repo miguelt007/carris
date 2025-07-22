@@ -38,14 +38,23 @@
       }
     }
 
+    const cachePatterns = new Map();
+
     async function obterParagens(pattern_id) {
+      if (cachePatterns.has(pattern_id)) {
+        return cachePatterns.get(pattern_id);
+      }
+
       try {
         const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
         if (!resposta.ok) throw new Error("Erro ao obter paragens");
         const dados = await resposta.json();
-        return dados?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
+        const paragens = dados?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
+        cachePatterns.set(pattern_id, paragens);
+        return paragens;
       } catch (error) {
         console.warn("Paragens não disponíveis:", error);
+        cachePatterns.set(pattern_id, []);
         return [];
       }
     }
@@ -56,6 +65,10 @@
           .then(res => res.json());
 
         console.log("Veículos recebidos:", veiculos);
+
+        map.eachLayer(layer => {
+          if (layer instanceof L.Marker) map.removeLayer(layer);
+        });
 
         veiculos.forEach(async veiculo => {
           const {
