@@ -38,6 +38,18 @@
       }
     }
 
+    async function obterParagens(pattern_id) {
+      try {
+        const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
+        if (!resposta.ok) throw new Error("Erro ao obter paragens");
+        const dados = await resposta.json();
+        return dados?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
+      } catch (error) {
+        console.warn("Paragens não disponíveis:", error);
+        return [];
+      }
+    }
+
     async function carregarAutocarros() {
       try {
         const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles")
@@ -45,7 +57,7 @@
 
         console.log("Veículos recebidos:", veiculos);
 
-        veiculos.forEach(veiculo => {
+        veiculos.forEach(async veiculo => {
           const {
             lat, lon, id, line_id, speed,
             bearing, current_status, pattern_id,
@@ -59,12 +71,14 @@
           const estado = traduzirStatus(current_status);
           const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
 
+          const paragens = await obterParagens(pattern_id);
+
           const marcador = new L.Marker([lat, lon], {
             icon: iconeAutocarro
           }).addTo(map);
 
-          marcador.setRotationAngle(bearing); // aplica rotação
-          marcador.setRotationOrigin("center"); // gira a partir do centro
+          marcador.setRotationAngle(bearing);
+          marcador.setRotationOrigin("center");
 
           marcador.bindPopup(`
             🚌 <strong>Autocarro ${id}</strong><br>
@@ -73,7 +87,8 @@
             Direção: ${direcao}<br>
             Estado: ${estado}<br>
             Percurso: ${pattern_id}<br>
-            Atualização: ${hora}
+            Atualização: ${hora}<br>
+            <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
           `);
         });
       } catch (error) {
