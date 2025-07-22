@@ -69,6 +69,8 @@
             timestamp
           } = veiculo;
 
+          console.log(`Autocarro ${id} → heading:`, heading, "| status:", status);
+
           if (lat && lon) {
             const anterior = marcadores.get(id);
             let angulo = 0;
