@@ -29,6 +29,13 @@
       popupAnchor: [0, -10]
     });
 
+    const iconeParado = L.icon({
+      iconUrl: "https://miguelt007.github.io/carris/bus_stopped.png",
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -10]
+    });
+
     function traduzirStatus(status) {
       switch (status) {
         case "INCOMING_AT": return "A chegar à paragem";
@@ -40,22 +47,25 @@
 
     const cachePatterns = new Map();
 
-    async function obterParagens(pattern_id) {
+    async function obterInfoPercurso(pattern_id) {
       if (cachePatterns.has(pattern_id)) {
         return cachePatterns.get(pattern_id);
       }
 
       try {
         const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
-        if (!resposta.ok) throw new Error("Erro ao obter paragens");
+        if (!resposta.ok) throw new Error("Erro ao obter percurso");
         const dados = await resposta.json();
+        const headsign = dados?.headsign || "não disponível";
         const paragens = dados?.path?.map(p => p.stop?.name).filter(Boolean).slice(0, 5) || [];
-        cachePatterns.set(pattern_id, paragens);
-        return paragens;
+        const info = { headsign, paragens };
+        cachePatterns.set(pattern_id, info);
+        return info;
       } catch (error) {
-        console.warn("Paragens não disponíveis:", error);
-        cachePatterns.set(pattern_id, []);
-        return [];
+        console.warn("Percurso não disponível:", error);
+        const info = { headsign: "não disponível", paragens: [] };
+        cachePatterns.set(pattern_id, info);
+        return info;
       }
     }
 
@@ -79,15 +89,18 @@
 
           if (!lat || !lon) return;
 
+          // Filtro por linha (exemplo: só mostrar linha 207)
+          // if (line_id !== "207") return;
+
           const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
           const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
           const estado = traduzirStatus(current_status);
           const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
 
-          const paragens = await obterParagens(pattern_id);
+          const { headsign, paragens } = await obterInfoPercurso(pattern_id);
 
           const marcador = new L.Marker([lat, lon], {
-            icon: iconeAutocarro
+            icon: velocidadeKmH > 0 ? iconeAutocarro : iconeParado
           }).addTo(map);
 
           marcador.setRotationAngle(bearing);
@@ -96,6 +109,7 @@
           marcador.bindPopup(`
             🚌 <strong>Autocarro ${id}</strong><br>
             Linha: ${line_id}<br>
+            Destino: ${headsign}<br>
             Velocidade: ${velocidadeKmH} km/h<br>
             Direção: ${direcao}<br>
             Estado: ${estado}<br>
