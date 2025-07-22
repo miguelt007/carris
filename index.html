@@ -29,6 +29,25 @@
       popupAnchor: [0, -10]
     });
 
+    const iconeUtilizador = L.icon({
+      iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Black_circle.svg/32px-Black_circle.svg.png",
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+
+    let marcadorUtilizador;
+
+    navigator.geolocation.watchPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      if (!marcadorUtilizador) {
+        marcadorUtilizador = L.marker([latitude, longitude], {
+          icon: iconeUtilizador
+        }).addTo(map);
+      } else {
+        marcadorUtilizador.setLatLng([latitude, longitude]);
+      }
+    });
+
     function traduzirStatus(status) {
       switch (status) {
         case "INCOMING_AT": return "A chegar à paragem";
@@ -85,7 +104,9 @@
         console.log("Veículos recebidos:", veiculos);
 
         map.eachLayer(layer => {
-          if (layer instanceof L.Marker) map.removeLayer(layer);
+          if (layer instanceof L.Marker && layer !== marcadorUtilizador) {
+            map.removeLayer(layer);
+          }
         });
 
         veiculos.forEach(async veiculo => {
