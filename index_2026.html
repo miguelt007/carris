@@ -87,10 +87,10 @@ async function obterInfoPercurso(pattern_id){
   }catch{return {headsign:"não disponível",paragens:[],proximaParagem:null};}
 }
 
-// Marcadores existentes
+// Marcadores existentes com estado
 const marcadoresBuses = new Map();
 
-// Função de ícone SVG otimizado (retângulo fixo, texto à esquerda, seta visível)
+// Função de ícone SVG fixo
 function createBusSVGIcon(line){
   const rectWidth = 40;
   const height = 20;
@@ -110,24 +110,34 @@ function createBusSVGIcon(line){
   });
 }
 
-// Função de interpolação
+// Interpolação
 function lerp(a,b,t){ return a + (b-a)*t; }
 function interpolateLatLng(latlng1, latlng2, t){
   return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)];
 }
 
-// Função de animação com requestAnimationFrame
-function animateMarker(marker, startPos, endPos, startAngle, endAngle, duration){
+// Animação com requestAnimationFrame
+function animateMarker(markerObj, endPos, endAngle, duration){
   const startTime = performance.now();
+  const startPos = markerObj.currentPos;
+  const startAngle = markerObj.currentAngle;
+
+  if(markerObj.animationFrameId) cancelAnimationFrame(markerObj.animationFrameId);
+
   function frame(time){
     const t = Math.min((time - startTime)/duration,1);
-    const newPos = interpolateLatLng([startPos.lat, startPos.lng], endPos, t);
-    marker.setLatLng(newPos);
+    const newPos = interpolateLatLng(startPos,endPos,t);
     const angle = lerp(startAngle,endAngle,t);
-    marker.setRotationAngle(angle);
-    if(t<1) requestAnimationFrame(frame);
+    markerObj.marker.setLatLng(newPos);
+    markerObj.marker.setRotationAngle(angle);
+    markerObj.currentPos = newPos;
+    markerObj.currentAngle = angle;
+
+    if(t<1) markerObj.animationFrameId = requestAnimationFrame(frame);
+    else markerObj.animationFrameId = null;
   }
-  requestAnimationFrame(frame);
+
+  markerObj.animationFrameId = requestAnimationFrame(frame);
 }
 
 // Carregar autocarros com animação suave
@@ -144,7 +154,6 @@ async function carregarAutocarros(){
       const direcao = typeof bearing==="number"?Math.round(bearing)+'°':'não disponível';
       const estado = traduzirStatus(current_status);
       const hora = timestamp?new Date(timestamp*1000).toLocaleTimeString("pt-PT"):'não disponível';
-
       const {headsign,paragens,proximaParagem} = await obterInfoPercurso(pattern_id);
 
       let tempoEstimado = "não disponível";
@@ -155,13 +164,10 @@ async function carregarAutocarros(){
       }
 
       if(marcadoresBuses.has(id)){
-        const m = marcadoresBuses.get(id);
-        const startPos = m.getLatLng();
-        const startAngle = m.options.rotationAngle || 0;
-        const endPos = [lat,lon];
-        const endAngle = bearing || 0;
-        animateMarker(m, startPos, endPos, startAngle, endAngle, 30000);
-        if(m._popup) m._popup.setContent(`
+        const mObj = marcadoresBuses.get(id);
+        animateMarker(mObj, [lat,lon], bearing||0, 30000);
+
+        if(mObj.marker._popup) mObj.marker._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
           <b>Destino:</b> ${headsign}<br>
@@ -172,14 +178,15 @@ async function carregarAutocarros(){
           <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
           <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
+
       } else {
-        const marcador = L.marker([lat,lon],{
+        const marker = L.marker([lat,lon],{
           icon:createBusSVGIcon(line_id),
           rotationAngle: bearing||0,
           rotationOrigin: 'center'
         }).addTo(map);
 
-        marcador.bindPopup(`
+        marker.bindPopup(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
           <b>Destino:</b> ${headsign}<br>
@@ -191,7 +198,12 @@ async function carregarAutocarros(){
           <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
 
-        marcadoresBuses.set(id,marcador);
+        marcadoresBuses.set(id,{
+          marker,
+          currentPos: [lat,lon],
+          currentAngle: bearing||0,
+          animationFrameId:null
+        });
       }
     });
   }catch(err){ console.error('Erro ao carregar veículos:',err); }
