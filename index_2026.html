@@ -42,23 +42,24 @@ Carris Metropolitana – Live
 
 <script>
 
+// MAPA
 const map = L.map('map').setView([38.736946, -9.142685], 12);
 
 L.tileLayer(
-"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-{ attribution:"© OpenStreetMap" }
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { attribution:"© OpenStreetMap" }
 ).addTo(map);
 
 
-// ---------- ICON ----------
+// ÍCONE
 function createBusIcon(line){
 
-  const h=20;
-  const rectW=30+(line.length*6);
-  const arrowW=10;
-  const w=rectW+arrowW;
+  const h = 20;
+  const rectW = 30 + (line ? line.length*6 : 10);
+  const arrowW = 10;
+  const w = rectW + arrowW;
 
-  const svg=`
+  const svg = `
   <svg xmlns="http://www.w3.org/2000/svg"
        width="${w}" height="${h}">
     <rect width="${rectW}" height="${h}"
@@ -67,7 +68,7 @@ function createBusIcon(line){
     <text x="6" y="${h/2+5}"
           font-size="12"
           font-weight="bold">
-      ${line}
+      ${line || "?"}
     </text>
     <polygon points="${rectW},${h/2-5}
                      ${rectW},${h/2+5}
@@ -83,92 +84,66 @@ function createBusIcon(line){
 }
 
 
-// ---------- TRIP CACHE ----------
-const tripCache=new Map();
+// VEÍCULOS
+const markers = new Map();
 
-async function fetchTrip(trip_id){
-
-  if(!trip_id) return {headsign:"",stops:[]};
-  if(tripCache.has(trip_id))
-    return tripCache.get(trip_id);
+async function updateVehicles(){
 
   try{
 
-    const res=await fetch(
-    `https://api.carrismetropolitana.pt/v2/trips/${trip_id}`
-    );
+    const vehicles = await fetch(
+      "https://api.carrismetropolitana.pt/v2/vehicles"
+    ).then(r=>r.json());
 
-    const data=await res.json();
+    vehicles.forEach(v=>{
 
-    const stops=(data.stop_times||[])
-      .map(s=>s.stop)
-      .filter(Boolean);
+      if(v.lat == null || v.lon == null)
+        return;
 
-    const headsign=
-      data.headsign ||
-      (stops.length?stops[stops.length-1].name:"");
+      const popup = `
+        <b>ID:</b> ${v.id}<br>
+        <b>Vehicle ID:</b> ${v.vehicle_id}<br>
+        <b>Linha:</b> ${v.line_id}<br>
+        <b>Pattern:</b> ${v.pattern_id}<br>
+        <b>Trip:</b> ${v.trip_id}<br>
+        <b>Status:</b> ${v.current_status}<br>
+        <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
+        <b>Bearing:</b> ${v.bearing}<br>
+        <b>Stop ID:</b> ${v.stop_id}<br>
+        <b>Lat:</b> ${v.lat}<br>
+        <b>Lon:</b> ${v.lon}<br>
+        <b>Timestamp:</b> ${v.timestamp}
+      `;
 
-    const info={headsign,stops};
+      if(!markers.has(v.id)){
 
-    tripCache.set(trip_id,info);
-    return info;
+        const marker = L.marker([v.lat, v.lon],{
+          icon: createBusIcon(v.line_id),
+          rotationAngle: v.bearing || 0,
+          rotationOrigin: "center center"
+        }).addTo(map);
 
-  }catch(e){
-    console.log("Erro trip:",e);
-    return {headsign:"",stops:[]};
+        marker.bindPopup(popup);
+
+        markers.set(v.id, marker);
+
+      } else {
+
+        const m = markers.get(v.id);
+        m.setLatLng([v.lat,v.lon]);
+        m.setRotationAngle(v.bearing || 0);
+        m.getPopup().setContent(popup);
+      }
+
+    });
+
+  } catch(e){
+    console.error("Erro API:", e);
   }
 }
 
-
-// ---------- VEHICLES ----------
-const markers=new Map();
-
-async function update(){
-
-  const vehicles=await fetch(
-  "https://api.carrismetropolitana.pt/v2/vehicles"
-  ).then(r=>r.json());
-
-  vehicles.forEach(async v=>{
-
-    if(!v.lat||!v.lon) return;
-
-    const trip=await fetchTrip(v.trip_id);
-
-    const popup=`
-    <b>Linha:</b> ${v.line_id}<br>
-    <b>Destino:</b> ${trip.headsign}<br>
-    <b>Velocidade:</b> ${v.speed?Math.round(v.speed*3.6):0} km/h<br>
-    <b>Estado:</b> ${v.current_status}<br><br>
-    <b>Próximas paragens:</b><br>
-    ${trip.stops.slice(0,5).map(s=>s.name).join("<br>")}
-    `;
-
-    if(!markers.has(v.id)){
-
-      const marker=L.marker([v.lat,v.lon],{
-        icon:createBusIcon(v.line_id),
-        rotationAngle:v.bearing||0,
-        rotationOrigin:"center center"
-      }).addTo(map);
-
-      marker.bindPopup(popup);
-
-      markers.set(v.id,marker);
-
-    }else{
-
-      const m=markers.get(v.id);
-      m.setLatLng([v.lat,v.lon]);
-      m.setRotationAngle(v.bearing||0);
-      m.getPopup().setContent(popup);
-    }
-
-  });
-}
-
-update();
-setInterval(update,30000);
+updateVehicles();
+setInterval(updateVehicles, 30000);
 
 </script>
 </body>
