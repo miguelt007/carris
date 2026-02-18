@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Teste Mock</title>
+<title>Carris Metropolitana – Teste Mock Percurso</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
@@ -29,7 +29,7 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 <body>
 
 <div id="header">
-  <span class="live-indicator"></span> Carris Metropolitana – Teste Mock
+  <span class="live-indicator"></span> Carris Metropolitana – Teste Mock Percurso
 </div>
 <div id="map"></div>
 <button id="botao-centro">&#9673;</button>
@@ -118,57 +118,68 @@ function calculateBearing(lat1, lon1, lat2, lon2){
   return (Math.atan2(y,x) * 180/Math.PI + 360) % 360;
 }
 
-// Dados simulados
-let testVehicles = [
-  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,current_status:"IN_TRANSIT_TO"},
-  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,current_status:"IN_TRANSIT_TO"},
-  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,current_status:"IN_TRANSIT_TO"}
+// Percursos simulados
+const route1 = [
+  [38.7369,-9.1426],[38.7375,-9.1410],[38.7380,-9.1395],[38.7385,-9.1380],[38.7390,-9.1365]
+];
+const route2 = [
+  [38.7400,-9.1500],[38.7410,-9.1485],[38.7420,-9.1470],[38.7430,-9.1455]
+];
+const route3 = [
+  [38.7300,-9.1350],[38.7310,-9.1365],[38.7320,-9.1380],[38.7330,-9.1395]
 ];
 
-// Atualiza posições de teste a cada 30s
-function moveMockVehicles(){
-  testVehicles.forEach(v=>{
-    v.prevLat = v.lat;
-    v.prevLon = v.lon;
-    v.lat += (Math.random()-0.5)*0.0015;
-    v.lon += (Math.random()-0.5)*0.0015;
-    // Bearing será calculado depois
-  });
+// Autocarros simulados
+let testVehicles = [
+  {id:"1",line_id:"4701",route:route1,index:0,current_status:"IN_TRANSIT_TO"},
+  {id:"2",line_id:"7301",route:route2,index:0,current_status:"IN_TRANSIT_TO"},
+  {id:"3",line_id:"7901",route:route3,index:0,current_status:"IN_TRANSIT_TO"}
+];
+
+// Mover autocarro ao longo do percurso
+function moveAlongRoute(v){
+  const current = v.route[v.index];
+  const nextIndex = (v.index+1) % v.route.length;
+  const next = v.route[nextIndex];
+
+  v.prevLat = current[0];
+  v.prevLon = current[1];
+  v.lat = next[0];
+  v.lon = next[1];
+  v.index = nextIndex;
+
+  return calculateBearing(v.prevLat, v.prevLon, v.lat, v.lon);
 }
 
-// Carregar "autocarros" de teste
-async function carregarAutocarros(){
-  moveMockVehicles();
+// Carregar autocarros simulados
+function carregarAutocarros(){
   testVehicles.forEach(v=>{
-    const {id, line_id, lat, lon, prevLat, prevLon, current_status} = v;
+    const realBearing = moveAlongRoute(v);
+
     const headsign = "Teste destino";
     const paragens = ["Paragem A","Paragem B","Paragem C"];
-    const estado = traduzirStatus(current_status);
     const horaAtual = new Date().toLocaleTimeString("pt-PT",{hour12:false});
-
     const popupHTML = `
-      🚌 <strong>Autocarro ${id}</strong><br>
-      <b>Linha:</b> ${line_id}<br>
+      🚌 <strong>Autocarro ${v.id}</strong><br>
+      <b>Linha:</b> ${v.line_id}<br>
       <b>Destino:</b> ${headsign}<br>
-      <b>Estado:</b> ${estado}<br>
+      <b>Estado:</b> ${traduzirStatus(v.current_status)}<br>
       <b>Atualização:</b> ${horaAtual}<br>
       <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
     `;
 
-    const realBearing = prevLat != null ? calculateBearing(prevLat, prevLon, lat, lon) : 0;
-
-    if(!marcadoresBuses.has(id)){
-      const marker = L.marker([lat, lon], {
-        icon: createBusSVGIcon(line_id),
+    if(!marcadoresBuses.has(v.id)){
+      const marker = L.marker([v.lat, v.lon], {
+        icon: createBusSVGIcon(v.line_id),
         rotationAngle: realBearing,
         rotationOrigin:'center'
       }).addTo(map);
       marker.bindPopup(popupHTML);
-      marcadoresBuses.set(id,{marker,currentPos:[lat,lon],currentAngle:realBearing,animFrame:null});
+      marcadoresBuses.set(v.id,{marker,currentPos:[v.lat,v.lon],currentAngle:realBearing,animFrame:null});
     } else {
-      const mObj = marcadoresBuses.get(id);
+      const mObj = marcadoresBuses.get(v.id);
       mObj.marker._popup.setContent(popupHTML);
-      animateMarker(mObj, [lat, lon], realBearing, 30000);
+      animateMarker(mObj, [v.lat,v.lon], realBearing, 30000);
     }
   });
 }
