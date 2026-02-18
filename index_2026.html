@@ -3,100 +3,259 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Carris Metropolitana – Live v2</title>
+<title>Carris Metropolitana – Live</title>
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
 <style>
-html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
-#map{height:100%;width:100%;}
-#header{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;
-  background:rgba(0,0,0,0.6);padding:10px 18px;border-radius:8px;
-  color:white;font-size:18px;font-weight:bold;
+html,body{
+  margin:0;
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
 }
-.live-indicator{width:12px;height:12px;background:#29d029;border-radius:50%;animation:blink 1s infinite;}
-@keyframes blink{0%,50%,100%{opacity:1;}25%,75%{opacity:0.2;}}
+#map{
+  height:100%;
+  width:100%;
+}
+#header{
+  position:absolute;
+  top:12px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:1000;
+  background:rgba(0,0,0,0.7);
+  padding:10px 20px;
+  border-radius:10px;
+  color:white;
+  font-size:18px;
+  font-weight:bold;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.live-dot{
+  width:12px;
+  height:12px;
+  background:#1eff00;
+  border-radius:50%;
+  animation:blink 1s infinite;
+}
+@keyframes blink{
+  0%,100%{opacity:1;}
+  50%{opacity:0.3;}
+}
 </style>
 </head>
 <body>
 
-<div id="header"><span class="live-indicator"></span> Carris Metropolitana – Live</div>
+<div id="header">
+  <div class="live-dot"></div>
+  Carris Metropolitana – Live
+</div>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
+
 <script>
 
 // ---------------- MAPA ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"© OpenStreetMap contributors" }).addTo(map);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution:"© OpenStreetMap contributors"
+}).addTo(map);
+
 
 // ---------------- ICON FACTORY ----------------
-function createBusSVGIcon(line){
-  const maxWidth=46, height=20, padding=3, arrowW=10;
-  const rectW=Math.min(30 + line.length*5, maxWidth);
-  const fontSize=(line.length>3)?10:12;
+function createBusIcon(line){
 
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${rectW+arrowW}" height="${height}">
-    <rect x="0" y="0" width="${rectW}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
-    <text x="${padding}" y="${height/2+5}" font-size="${fontSize}" font-family="Arial" font-weight="bold" fill="black">${line}</text>
-    <polygon points="${rectW},${height/2-5} ${rectW},${height/2+5} ${rectW+arrowW},${height/2}" fill="black"/>
+  const height = 20;
+  const padding = 6;
+  const arrowW = 10;
+  const rectW = 28 + (line.length * 6);
+  const fontSize = line.length > 3 ? 10 : 12;
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg"
+       width="${rectW+arrowW}" height="${height}">
+    <rect x="0" y="0"
+          width="${rectW}"
+          height="${height}"
+          fill="#FFD100"
+          stroke="black"
+          rx="4" ry="4"/>
+    <text x="${padding}"
+          y="${height/2+5}"
+          font-size="${fontSize}"
+          font-family="Arial"
+          font-weight="bold"
+          fill="black">
+      ${line}
+    </text>
+    <polygon points="${rectW},${height/2-5}
+                     ${rectW},${height/2+5}
+                     ${rectW+arrowW},${height/2}"
+             fill="black"/>
   </svg>`;
-  return L.icon({iconUrl:"data:image/svg+xml;base64,"+btoa(svg), iconSize:[rectW+arrowW,height], iconAnchor:[(rectW+arrowW)/2,height/2]});
+
+  return L.icon({
+    iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
+    iconSize:[rectW+arrowW,height],
+    iconAnchor:[(rectW+arrowW)/2,height/2]
+  });
 }
 
-// ---------------- UTILS ----------------
+
+// ---------------- UTIL ----------------
 function traduzirStatus(s){
-  switch(s){ case "INCOMING_AT": return "A chegar"; case "STOPPED_AT": return "Parado"; case "IN_TRANSIT_TO": return "Em trânsito"; default: return s||"Desconhecido"; }
+  switch(s){
+    case "INCOMING_AT": return "A chegar";
+    case "STOPPED_AT": return "Parado";
+    case "IN_TRANSIT_TO": return "Em trânsito";
+    default: return s || "Desconhecido";
+  }
 }
-function calcDistKm(lat1,lon1,lat2,lon2){ const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R; }
-function lerp(a,b,t){ return a+(b-a)*t; }
-function interp(p1,p2,t){ return [lerp(p1[0],p2[0],t),lerp(p1[1],p2[1],t)]; }
-function shortestAngle(from,to){ let delta=to-from; while(delta>180) delta-=360; while(delta<-180) delta+=360; return from+delta; }
 
-// ---------------- STOPS ----------------
+function calcDistKm(lat1,lon1,lat2,lon2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*
+    Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLon/2)**2;
+  return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R;
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+function interp(p1,p2,t){
+  return [
+    lerp(p1[0],p2[0],t),
+    lerp(p1[1],p2[1],t)
+  ];
+}
+
+function shortestAngle(from,to){
+  let delta = to - from;
+  while(delta > 180) delta -= 360;
+  while(delta < -180) delta += 360;
+  return from + delta;
+}
+
+
+// ---------------- STOPS CACHE ----------------
 let stopMap = new Map();
+
 async function loadStops(){
   try{
     const res = await fetch("https://api.carrismetropolitana.pt/v2/stops");
     const data = await res.json();
-    data.forEach(s => stopMap.set(s.id,{name:s.name,lat:s.lat,lon:s.lon}));
-  }catch(e){ console.warn("Erro stops:",e); }
+
+    data.forEach(s=>{
+      stopMap.set(s.id,{
+        name:s.name,
+        lat:s.lat,
+        lon:s.lon
+      });
+    });
+
+    console.log("Stops carregadas:", stopMap.size);
+
+  }catch(e){
+    console.error("Erro stops:",e);
+  }
 }
+
 loadStops();
 
-// ---------------- PATTERNS ----------------
+
+// ---------------- PATTERN CACHE ----------------
 const patternCache = new Map();
+
 async function fetchPattern(pattern_id){
-  if(patternCache.has(pattern_id)) return patternCache.get(pattern_id);
+
+  if(!pattern_id) return {headsign:"---",paragens:[]};
+
+  if(patternCache.has(pattern_id))
+    return patternCache.get(pattern_id);
+
   try{
-    const res = await fetch(`https://api.carrismetropolitana.pt/v2/patterns/${pattern_id}`);
-    if(!res.ok) throw new Error("pattern fail");
+
+    const res = await fetch(
+      `https://api.carrismetropolitana.pt/v2/patterns/${pattern_id}`
+    );
+
     const data = await res.json();
-    const paragens=(data.path||[]).map(p=>p.stop && {name:p.stop.name,lat:p.stop.lat,lon:p.stop.lon}).filter(Boolean);
-    const info={headsign:data.headsign||"",paragens};
-    patternCache.set(pattern_id,info);
+
+    const paragens = (data.path || [])
+      .map(p=>{
+        const stop = stopMap.get(p.stop_id);
+        if(!stop) return null;
+        return stop;
+      })
+      .filter(Boolean);
+
+    const info = {
+      headsign:data.headsign || "",
+      paragens
+    };
+
+    patternCache.set(pattern_id, info);
+
     return info;
-  }catch(e){ patternCache.set(pattern_id,{headsign:"---",paragens:[]}); return {headsign:"---",paragens:[]}; }
+
+  }catch(e){
+    return {headsign:"---",paragens:[]};
+  }
 }
 
-// ---------------- VEHICLE MARKERS ----------------
+
+// ---------------- VEHICLES ----------------
 const markers = new Map();
 
 async function updateVehicles(){
+
   try{
-    const veics = await fetch("https://api.carrismetropolitana.pt/v2/vehicles").then(r=>r.json());
 
-    veics.forEach(async v=>{
-      const {id,lat,lon,bearing,current_status,pattern_id,speed,timestamp,line_id} = v;
-      if(lat==null||lon==null) return;
+    const vehicles = await fetch(
+      "https://api.carrismetropolitana.pt/v2/vehicles"
+    ).then(r=>r.json());
 
-      const estado=traduzirStatus(current_status);
-      const hora=new Date(timestamp*1000).toLocaleTimeString("pt-PT",{hour12:false});
-      const {headsign,paragens}=await fetchPattern(pattern_id);
+    vehicles.forEach(async v=>{
 
-      let tempo="n/a", velKmH = speed?Math.round(speed*3.6):0;
-      let proxParagens = paragens.slice(0,5);
-      if(proxParagens.length>0 && velKmH>0){
-        const dKm = calcDistKm(lat,lon,proxParagens[0].lat,proxParagens[0].lon);
+      const {
+        id, lat, lon,
+        bearing, current_status,
+        pattern_id, speed,
+        timestamp, line_id
+      } = v;
+
+      if(lat==null || lon==null) return;
+
+      const estado = traduzirStatus(current_status);
+      const hora = new Date(timestamp*1000)
+        .toLocaleTimeString("pt-PT",{hour12:false});
+
+      const {headsign,paragens} =
+        await fetchPattern(pattern_id);
+
+      const velKmH = speed
+        ? Math.round(speed*3.6)
+        : 0;
+
+      let tempo = "n/a";
+      const proximas = paragens.slice(0,5);
+
+      if(proximas.length>0 && velKmH>0){
+        const dKm = calcDistKm(
+          lat,lon,
+          proximas[0].lat,
+          proximas[0].lon
+        );
         tempo = Math.round((dKm/velKmH)*60)+" min";
       }
 
@@ -108,47 +267,90 @@ async function updateVehicles(){
         <b>Atualização:</b> ${hora}<br>
         <b>Tempo até próxima parada:</b> ${tempo}<br>
         <br><b>Próximas paragens:</b><br>
-        ${proxParagens.map(p=>p.name).join("<br>")}
+        ${proximas.map(p=>p.name).join("<br>")}
       `;
 
       if(!markers.has(id)){
-        const icon = createBusSVGIcon(line_id||"?");
-        const m = L.marker([lat,lon],{icon,rotationAngle:bearing||0,rotationOrigin:"center"}).addTo(map);
+
+        const icon = createBusIcon(line_id||"?");
+
+        const m = L.marker([lat,lon],{
+          icon,
+          rotationAngle:bearing || 0,
+          rotationOrigin:"center"
+        }).addTo(map);
+
         m.bindPopup(popup);
-        markers.set(id,{marker:m,currentPos:[lat,lon],currentAngle:bearing||0,anim:null});
+
+        markers.set(id,{
+          marker:m,
+          currentPos:[lat,lon],
+          currentAngle:bearing||0,
+          anim:null
+        });
+
       } else {
+
         const obj = markers.get(id);
         obj.marker._popup.setContent(popup);
+
         smoothMove(obj,[lat,lon],bearing||0);
       }
+
     });
 
-  }catch(e){ console.error("Erro v2 vehicles:",e); }
+  }catch(e){
+    console.error("Erro vehicles:",e);
+  }
 }
 
-// ---------------- SMOOTH MOVEMENT ----------------
+
+// ---------------- MOVIMENTO SUAVE ----------------
 function smoothMove(obj,newPos,newAng,duration=30000){
-  const start=performance.now(), fromPos=obj.currentPos.slice(), fromAng=obj.currentAngle;
-  if(obj.anim) cancelAnimationFrame(obj.anim);
+
+  const start = performance.now();
+  const fromPos = obj.currentPos.slice();
+  const fromAng = obj.currentAngle ?? newAng;
+
+  const targetAng =
+    shortestAngle(fromAng,newAng);
+
+  if(obj.anim)
+    cancelAnimationFrame(obj.anim);
 
   function frame(ts){
-    const t=Math.min((ts-start)/duration,1);
-    const p=interp(fromPos,newPos,t);
-    const a=shortestAngle(fromAng,newAng);
-    const ang=lerp(fromAng,a,t);
-    obj.marker.setLatLng(p);
+
+    const t =
+      Math.min((ts-start)/duration,1);
+
+    const pos =
+      interp(fromPos,newPos,t);
+
+    const ang =
+      lerp(fromAng,targetAng,t);
+
+    obj.marker.setLatLng(pos);
     obj.marker.setRotationAngle(ang);
-    obj.currentPos=p;
-    obj.currentAngle=ang;
-    if(t<1) obj.anim=requestAnimationFrame(frame);
+
+    if(t<1){
+      obj.anim =
+        requestAnimationFrame(frame);
+    } else {
+      obj.currentPos=newPos;
+      obj.currentAngle=newAng;
+    }
   }
-  obj.anim=requestAnimationFrame(frame);
+
+  obj.anim =
+    requestAnimationFrame(frame);
 }
+
 
 // ---------------- START ----------------
 updateVehicles();
 setInterval(updateVehicles,30000);
 
 </script>
+
 </body>
 </html>
