@@ -90,20 +90,24 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Criar ícone SVG dinâmico
+// Função de ícone SVG com texto à esquerda e seta visível
 function createBusSVGIcon(line){
-  const width = 20 + line.length*8; // Ajusta largura pelo número de caracteres
+  const textLength = line.length * 8; // tamanho do texto
+  const rectWidth = Math.max(30 + textLength, 50); // retângulo maior
   const height = 20;
+  const padding = 4; // texto à esquerda
+  const arrowWidth = 10; // espaço para a seta
+
   const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <rect x="0" y="0" width="${width}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
-    <text x="${width/2}" y="${height/2+5}" font-size="12" text-anchor="middle" fill="black" font-family="Arial" font-weight="bold">${line}</text>
-    <polygon points="${width-5},${height/2-5} ${width-5},${height/2+5} ${width+5},${height/2}" fill="black"/>
+  <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth + arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth + arrowWidth} ${height}">
+    <rect x="0" y="0" width="${rectWidth}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
+    <text x="${padding}" y="${height/2 + 5}" font-size="12" text-anchor="start" fill="black" font-family="Arial" font-weight="bold">${line}</text>
+    <polygon points="${rectWidth},${height/2 - 5} ${rectWidth},${height/2 + 5} ${rectWidth + arrowWidth},${height/2}" fill="black"/>
   </svg>`;
   return L.icon({
     iconUrl: "data:image/svg+xml;base64," + btoa(svg),
-    iconSize: [width, height],
-    iconAnchor: [width/2, height/2]
+    iconSize: [rectWidth + arrowWidth, height],
+    iconAnchor: [(rectWidth + arrowWidth)/2, height/2]
   });
 }
 
