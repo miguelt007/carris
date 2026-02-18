@@ -90,9 +90,9 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Função de ícone SVG otimizado (texto à esquerda, retângulo fixo)
+// Função de ícone SVG otimizado (retângulo fixo, texto à esquerda, seta visível)
 function createBusSVGIcon(line){
-  const rectWidth = 40; // retângulo fixo
+  const rectWidth = 40;
   const height = 20;
   const padding = 4;
   const arrowWidth = 10;
@@ -110,13 +110,27 @@ function createBusSVGIcon(line){
   });
 }
 
-// Interpolação linear para animação suave
+// Função de interpolação
 function lerp(a,b,t){ return a + (b-a)*t; }
 function interpolateLatLng(latlng1, latlng2, t){
   return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)];
 }
 
-// Carregar autocarros com animação
+// Função de animação com requestAnimationFrame
+function animateMarker(marker, startPos, endPos, startAngle, endAngle, duration){
+  const startTime = performance.now();
+  function frame(time){
+    const t = Math.min((time - startTime)/duration,1);
+    const newPos = interpolateLatLng([startPos.lat, startPos.lng], endPos, t);
+    marker.setLatLng(newPos);
+    const angle = lerp(startAngle,endAngle,t);
+    marker.setRotationAngle(angle);
+    if(t<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Carregar autocarros com animação suave
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
@@ -146,20 +160,7 @@ async function carregarAutocarros(){
         const startAngle = m.options.rotationAngle || 0;
         const endPos = [lat,lon];
         const endAngle = bearing || 0;
-        const duration = 30000; // 30s
-        const steps = 30; // frames
-        let step = 0;
-
-        const anim = setInterval(()=>{
-          step++;
-          const t = step/steps;
-          const newPos = interpolateLatLng([startPos.lat, startPos.lng], endPos, t);
-          m.setLatLng(newPos);
-          const angle = lerp(startAngle,endAngle,t);
-          m.setRotationAngle(angle);
-          if(step>=steps) clearInterval(anim);
-        }, duration/steps);
-
+        animateMarker(m, startPos, endPos, startAngle, endAngle, 30000);
         if(m._popup) m._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
