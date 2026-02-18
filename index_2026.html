@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carris Metropolitana – Live</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous"/>
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 #map { height:100%; width:100%; }
@@ -12,14 +12,16 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
   position:absolute; top:10px; left:50%; transform:translateX(-50%);
   z-index:1000; background: rgba(0,0,0,0.5); padding:10px 20px; border-radius:10px;
   display:flex; align-items:center; gap:10px; color:white; font-weight:bold; font-size:18px;
-  box-shadow:0 4px 10px rgba(0,0,0,0.3);
 }
 .live-indicator { width:12px; height:12px; background:#27ae60; border-radius:50%; animation:blink 1s infinite; }
 @keyframes blink { 0%,50%,100%{opacity:1;} 25%,75%{opacity:0.2;} }
-.bus-container { position:relative; display:flex; align-items:center; justify-content:flex-start; height:30px; transform-origin:center; }
+.bus-container {
+  display:flex; align-items:center; justify-content:flex-start;
+  height:30px; transform-origin:center;
+}
 .bus-rect {
   background:#FFD100; color:black; font-weight:bold; font-size:14px;
-  padding:0 6px; border-radius:4px; text-align:center; display:flex; align-items:center; justify-content:center;
+  padding:0 6px; border-radius:4px; display:flex; align-items:center; justify-content:center;
   white-space:nowrap; height:100%;
 }
 .bus-arrow {
@@ -32,12 +34,13 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 #botao-centro {
   position:absolute; bottom:20px; right:20px; z-index:999;
   background:white; border:2px solid #333; border-radius:50%; width:48px; height:48px;
-  font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  font-size:24px; text-align:center; line-height:44px; cursor:pointer;
 }
 .leaflet-popup-content { max-height:250px; overflow-y:auto; }
 </style>
 </head>
 <body>
+
 <div id="header">
   <span class="live-indicator"></span> Carris Metropolitana – Live
 </div>
@@ -47,16 +50,18 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 <script>
-const map = L.map("map").setView([38.736946, -9.142685], 11);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"© OpenStreetMap contributors" }).addTo(map);
+const map = L.map('map').setView([38.736946,-9.142685],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'© OpenStreetMap contributors'
+}).addTo(map);
 
 let marcadorUtilizador;
-navigator.geolocation.watchPosition(pos => {
-  const { latitude, longitude } = pos.coords;
-  if(!marcadorUtilizador) marcadorUtilizador = L.marker([latitude, longitude]).addTo(map);
-  else marcadorUtilizador.setLatLng([latitude, longitude]);
+navigator.geolocation.watchPosition(pos=>{
+  const {latitude,longitude} = pos.coords;
+  if(!marcadorUtilizador) marcadorUtilizador = L.marker([latitude,longitude]).addTo(map);
+  else marcadorUtilizador.setLatLng([latitude,longitude]);
 });
-document.getElementById("botao-centro").addEventListener("click", ()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
+document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
 
 function traduzirStatus(status){
   switch(status){
@@ -67,12 +72,6 @@ function traduzirStatus(status){
   }
 }
 
-function calcularDistanciaKm(lat1, lon1, lat2, lon2){
-  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R;
-}
-
 const cachePatterns = new Map();
 async function obterInfoPercurso(pattern_id){
   if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
@@ -80,22 +79,21 @@ async function obterInfoPercurso(pattern_id){
     const res = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
     if(!res.ok) throw new Error();
     const dados = await res.json();
-    const headsign = dados?.headsign || "não disponível";
-    const path = dados?.path || [];
+    const headsign = dados?.headsign||"não disponível";
+    const path = dados?.path||[];
     const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
-    const proximaParagem = path.find(p=>p.stop?.lat&&p.stop?.lon)?.stop || null;
-    const info={headsign, paragens, proximaParagem};
-    cachePatterns.set(pattern_id, info);
+    const proximaParagem = path.find(p=>p.stop?.lat && p.stop?.lon)?.stop||null;
+    const info={headsign,paragens,proximaParagem};
+    cachePatterns.set(pattern_id,info);
     return info;
-  }catch{return {headsign:"não disponível", paragens:[], proximaParagem:null};}
+  }catch{return {headsign:"não disponível",paragens:[],proximaParagem:null};}
 }
 
-// marcador por id para movimentação suave
 const marcadoresBuses = new Map();
 
-function createBusIcon(line, bearing){
+function createBusIcon(line,bearing){
   return L.divIcon({
-    className:"bus-wrapper",
+    className:'bus-wrapper',
     html:`<div class="bus-container" style="transform: rotate(${bearing||0}deg)">
       <div class="bus-rect">${line}</div>
       <div class="bus-arrow"></div>
@@ -107,30 +105,28 @@ function createBusIcon(line, bearing){
 
 async function carregarAutocarros(){
   try{
-    const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles").then(r=>r.json());
-    veiculos.forEach(async veiculo=>{
-      const { lat, lon, id, line_id, speed, bearing, current_status, pattern_id, timestamp } = veiculo;
+    const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
+    veiculos.forEach(async v=>{
+      const {lat,lon,id,line_id,speed,bearing,current_status,pattern_id,timestamp} = v;
       if(!lat||!lon) return;
 
-      const velocidadeKmH = speed ? Math.round(speed*3.6) : 0;
-      const direcao = typeof bearing==="number"?Math.round(bearing)+"°":"não disponível";
+      const velocidadeKmH = speed?Math.round(speed*3.6):0;
+      const direcao = typeof bearing==="number"?Math.round(bearing)+'°':'não disponível';
       const estado = traduzirStatus(current_status);
       const hora = new Date(timestamp*1000).toLocaleTimeString("pt-PT");
 
-      const {headsign, paragens, proximaParagem} = await obterInfoPercurso(pattern_id);
+      const {headsign,paragens,proximaParagem} = await obterInfoPercurso(pattern_id);
       let tempoEstimado="não disponível";
       if(proximaParagem && velocidadeKmH>0){
-        const distKm = calcularDistanciaKm(lat, lon, proximaParagem.lat, proximaParagem.lon);
-        const minutos = Math.round((distKm/velocidadeKmH)*60);
+        const dist = Math.sqrt((lat-proximaParagem.lat)**2+(lon-proximaParagem.lon)**2);
+        const minutos = Math.round(dist/0.0003); // aproximado
         tempoEstimado = `${minutos} min`;
       }
 
       if(marcadoresBuses.has(id)){
-        // movimentação suave
         const m = marcadoresBuses.get(id);
         m.setRotationAngle(bearing||0);
-        m.setRotationOrigin("center");
-        m.setLatLng([lat, lon]);
+        m.setLatLng([lat,lon]);
         m._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
@@ -140,10 +136,10 @@ async function carregarAutocarros(){
           <b>Estado:</b> ${estado}<br>
           <b>Atualização:</b> ${hora}<br>
           <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
-          <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
+          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
-      } else {
-        const marcador = L.marker([lat, lon], {icon:createBusIcon(line_id, bearing||0)}).addTo(map);
+      }else{
+        const marcador = L.marker([lat,lon],{icon:createBusIcon(line_id,bearing||0)}).addTo(map);
         marcador.bindPopup(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
@@ -153,16 +149,16 @@ async function carregarAutocarros(){
           <b>Estado:</b> ${estado}<br>
           <b>Atualização:</b> ${hora}<br>
           <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
-          <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
+          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
-        marcadoresBuses.set(id, marcador);
+        marcadoresBuses.set(id,marcador);
       }
     });
   }catch(console.error);
 }
 
 carregarAutocarros();
-setInterval(carregarAutocarros, 30000);
+setInterval(carregarAutocarros,30000);
 </script>
 </body>
 </html>
