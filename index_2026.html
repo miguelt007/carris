@@ -3,17 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Live</title>
+<title>Carris Metropolitana – Live com Rota Real</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html, body {
-  margin:0;
-  height:100%;
-  font-family: Arial, sans-serif;
-  overflow:hidden;
-}
+html, body { margin:0; height:100%; font-family: Arial, sans-serif; overflow:hidden; }
 #map { height:100%; }
 #header{
   position:absolute;
@@ -47,7 +42,7 @@ html, body {
 
 <div id="header">
   <div class="live-dot"></div>
-  Carris Metropolitana – Live
+  Carris Metropolitana – Live (Rota Real)
 </div>
 
 <div id="map"></div>
@@ -125,55 +120,93 @@ function lerPopup(v){
 
 // ---------------- MARKERS ----------------
 const markers = new Map();
+const patternsCache = new Map();
 
-// interpolação suave de posição e bearing (bearing gira pelo caminho mais curto)
-function moveMarker(marker, newLatLng, newBearing, duration = 28000){
-  if(!marker._latlng) return;
-  const start = marker.getLatLng();
-  const startBearing = marker.options.rotationAngle || 0;
-  const deltaLat = newLatLng[0] - start.lat;
-  const deltaLng = newLatLng[1] - start.lng;
+// ---------------- MOVE MARKER ----------------
+function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
+  if(!marker._latlng || !path || path.length<2) return;
 
-  // diferença mínima do ângulo
-  let deltaBearing = ((newBearing - startBearing + 540) % 360) - 180;
+  // Encontra segmento mais próximo da posição atual
+  let closestIndex = 0;
+  let minDist = Infinity;
+  const lat = vehicle.lat, lon = vehicle.lon;
+
+  for(let i=0;i<path.length-1;i++){
+    const d = Math.hypot(lat - path[i].lat, lon - path[i].lon);
+    if(d<minDist){ minDist=d; closestIndex=i; }
+  }
+
+  // Segmento inicial e final
+  const start = path[closestIndex];
+  const end = path[closestIndex+1] || path[closestIndex];
+
+  const deltaLat = end.lat - start.lat;
+  const deltaLng = end.lon - start.lon;
+
+  // Bearing real do segmento
+  const rad = Math.atan2(deltaLng, deltaLat);
+  const segmentBearing = rad*180/Math.PI;
 
   const startTime = performance.now();
+  const startPos = marker.getLatLng();
+  const startBearing = marker.options.rotationAngle || segmentBearing;
 
   function animate(time){
     const t = Math.min((time - startTime)/duration,1);
-    marker.setLatLng([start.lat + deltaLat*t, start.lng + deltaLng*t]);
+    const newLat = startPos.lat + deltaLat*t;
+    const newLon = startPos.lng + deltaLng*t;
+
+    // Diferença mínima de ângulo
+    let deltaBearing = ((segmentBearing - startBearing + 540)%360)-180;
+    marker.setLatLng([newLat,newLon]);
     marker.setRotationAngle(startBearing + deltaBearing*t);
+
     if(t<1) requestAnimationFrame(animate);
   }
 
   requestAnimationFrame(animate);
 }
 
-// ---------------- UPDATE ----------------
+// ---------------- UPDATE VEHICLES ----------------
 async function updateVehicles(){
   try{
     const vehicles = await fetch("https://api.carrismetropolitana.pt/v2/vehicles")
       .then(r=>r.json());
 
-    vehicles.forEach(v=>{
-      if(v.lat == null || v.lon == null) return;
+    for(const v of vehicles){
+      if(v.lat == null || v.lon == null) continue;
 
       const popupContent = lerPopup(v);
 
+      // Carregar path do pattern se não estiver em cache
+      if(!patternsCache.has(v.pattern_id)){
+        try{
+          const patternData = await fetch(`https://api.carrismetropolitana.pt/v2/patterns/${v.pattern_id}`)
+            .then(r=>r.json());
+          patternsCache.set(v.pattern_id, patternData.path || []);
+        }catch(e){
+          console.warn("Erro ao obter pattern",v.pattern_id,e);
+          patternsCache.set(v.pattern_id,[]);
+        }
+      }
+
+      const path = patternsCache.get(v.pattern_id);
+
       if(!markers.has(v.id)){
         const marker = L.marker([v.lat,v.lon],{
-          icon: createBusIcon(v.line_id),
-          rotationAngle: v.bearing || 0,
-          rotationOrigin: "center center"
+          icon:createBusIcon(v.line_id),
+          rotationAngle:v.bearing||0,
+          rotationOrigin:"center center"
         }).addTo(map);
         marker.bindPopup(popupContent);
         markers.set(v.id, marker);
       } else {
-        const m = markers.get(v.id);
-        moveMarker(m, [v.lat,v.lon], v.bearing || 0);
-        m.getPopup().setContent(popupContent);
+        const marker = markers.get(v.id);
+        marker.getPopup().setContent(popupContent);
+        if(path.length>1) moveMarkerAlongPath(marker, path, v);
+        else marker.setLatLng([v.lat,v.lon]); // fallback
       }
-    });
+    }
 
   } catch(e){
     console.error("Erro API:", e);
@@ -183,7 +216,6 @@ async function updateVehicles(){
 // ---------------- START ----------------
 updateVehicles();
 setInterval(updateVehicles,30000);
-
 </script>
 </body>
 </html>
