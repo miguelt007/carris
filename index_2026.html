@@ -24,20 +24,6 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
   font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
 }
 .leaflet-popup-content { max-height:250px; overflow-y:auto; }
-
-/* Ícone do autocarro simples */
-.bus-icon {
-  display:flex; align-items:center; justify-content:flex-start; height:30px;
-}
-.bus-rect {
-  background:#FFD100; color:black; font-weight:bold; font-size:14px;
-  padding:0 6px; border-radius:4px; display:flex; align-items:center; justify-content:center;
-  white-space:nowrap; height:100%;
-}
-.bus-arrow {
-  width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
-  border-bottom:10px solid black; margin-left:4px;
-}
 </style>
 </head>
 <body>
@@ -104,13 +90,20 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Criar ícone do autocarro simples
-function createBusIcon(line){
-  return L.divIcon({
-    className:'bus-wrapper',
-    html:`<div class="bus-icon"><div class="bus-rect">${line}</div><div class="bus-arrow"></div></div>`,
-    iconSize:[50,30],
-    iconAnchor:[25,15]
+// Criar ícone SVG dinâmico
+function createBusSVGIcon(line){
+  const width = 20 + line.length*8; // Ajusta largura pelo número de caracteres
+  const height = 20;
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
+    <text x="${width/2}" y="${height/2+5}" font-size="12" text-anchor="middle" fill="black" font-family="Arial" font-weight="bold">${line}</text>
+    <polygon points="${width-5},${height/2-5} ${width-5},${height/2+5} ${width+5},${height/2}" fill="black"/>
+  </svg>`;
+  return L.icon({
+    iconUrl: "data:image/svg+xml;base64," + btoa(svg),
+    iconSize: [width, height],
+    iconAnchor: [width/2, height/2]
   });
 }
 
@@ -155,7 +148,7 @@ async function carregarAutocarros(){
         `);
       } else {
         const marcador = L.marker([lat,lon],{
-          icon:createBusIcon(line_id),
+          icon:createBusSVGIcon(line_id),
           rotationAngle: bearing||0,
           rotationOrigin: 'center'
         }).addTo(map);
