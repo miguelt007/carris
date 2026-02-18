@@ -71,6 +71,16 @@ function createBusSVGIcon(line){
   });
 }
 
+// Função utilitária para status
+function traduzirStatus(status){
+  switch(status){
+    case "INCOMING_AT": return "A chegar à paragem";
+    case "STOPPED_AT": return "Parado na paragem";
+    case "IN_TRANSIT_TO": return "Em trânsito";
+    default: return "Desconhecido";
+  }
+}
+
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
@@ -101,16 +111,16 @@ function animateMarker(mObj, newPos, newAngle, duration=30000){
 
 // Dados simulados
 let testVehicles = [
-  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,bearing:90,current_status:"IN_TRANSIT_TO",pattern_id:"4701_0_2"},
-  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,bearing:180,current_status:"IN_TRANSIT_TO",pattern_id:"7301_0_1"},
-  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,bearing:270,current_status:"IN_TRANSIT_TO",pattern_id:"7901_0_1"}
+  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,bearing:90,current_status:"IN_TRANSIT_TO"},
+  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,bearing:180,current_status:"IN_TRANSIT_TO"},
+  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,bearing:270,current_status:"IN_TRANSIT_TO"}
 ];
 
 // Atualiza posições de teste a cada 30s
 function moveMockVehicles(){
   testVehicles.forEach(v=>{
-    v.lat += (Math.random()-0.5)*0.001;
-    v.lon += (Math.random()-0.5)*0.001;
+    v.lat += (Math.random()-0.5)*0.0015;
+    v.lon += (Math.random()-0.5)*0.0015;
     v.bearing = (v.bearing + Math.floor(Math.random()*20-10)) % 360;
   });
 }
@@ -119,7 +129,7 @@ function moveMockVehicles(){
 async function carregarAutocarros(){
   moveMockVehicles();
   testVehicles.forEach(v=>{
-    const {id, line_id, lat, lon, bearing, current_status, pattern_id} = v;
+    const {id, line_id, lat, lon, bearing, current_status} = v;
     const headsign = "Teste destino";
     const paragens = ["Paragem A","Paragem B","Paragem C"];
     const estado = traduzirStatus(current_status);
@@ -134,18 +144,20 @@ async function carregarAutocarros(){
       <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
     `;
 
-    if(marcadoresBuses.has(id)){
-      const mObj = marcadoresBuses.get(id);
-      mObj.marker._popup.setContent(popupHTML);
-      animateMarker(mObj, [lat, lon], bearing||0, 30000);
-    } else {
+    if(!marcadoresBuses.has(id)){
+      // Cria marcador diretamente na posição inicial
       const marker = L.marker([lat, lon], {
         icon: createBusSVGIcon(line_id),
         rotationAngle: bearing||0,
         rotationOrigin:'center'
       }).addTo(map);
       marker.bindPopup(popupHTML);
-      marcadoresBuses.set(id,{marker, currentPos:[lat,lon], currentAngle:bearing||0, animFrame:null});
+      marcadoresBuses.set(id,{marker,currentPos:[lat,lon],currentAngle:bearing||0,animFrame:null});
+    } else {
+      // Atualiza popup e anima suavemente
+      const mObj = marcadoresBuses.get(id);
+      mObj.marker._popup.setContent(popupHTML);
+      animateMarker(mObj, [lat, lon], bearing||0, 30000);
     }
   });
 }
