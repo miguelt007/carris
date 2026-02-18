@@ -137,14 +137,13 @@ function lerPopup(v){
 const markers = new Map();
 const patternsCache = new Map();
 
-// ---------------- MOVE MARKER ----------------
+// ---------------- MOVE MARKER COM BEARING DINÂMICO ----------------
 function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
   if(!marker._latlng || !path || path.length<2) return;
 
   let closestIndex = 0;
   let minDist = Infinity;
   const lat = vehicle.lat, lon = vehicle.lon;
-
   for(let i=0;i<path.length-1;i++){
     const d = Math.hypot(lat - path[i].lat, lon - path[i].lon);
     if(d<minDist){ minDist=d; closestIndex=i; }
@@ -152,25 +151,22 @@ function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
 
   const start = path[closestIndex];
   const end = path[closestIndex+1] || path[closestIndex];
-
-  const deltaLat = end.lat - start.lat;
-  const deltaLng = end.lon - start.lon;
-
-  const rad = Math.atan2(deltaLng, deltaLat);
-  const segmentBearing = rad*180/Math.PI;
-
-  const startTime = performance.now();
   const startPos = marker.getLatLng();
-  const startBearing = marker.options.rotationAngle || segmentBearing;
+  const startTime = performance.now();
 
   function animate(time){
     const t = Math.min((time - startTime)/duration,1);
-    const newLat = startPos.lat + deltaLat*t;
-    const newLon = startPos.lng + deltaLng*t;
+    const newLat = startPos.lat + (end.lat - start.lat)*t;
+    const newLon = startPos.lng + (end.lon - start.lon)*t;
 
-    let deltaBearing = ((segmentBearing - startBearing + 540)%360)-180;
+    // CALCULAR BEARING DO SEGMENTO EM CADA FRAME
+    const deltaLat = end.lat - start.lat;
+    const deltaLng = end.lon - start.lon;
+    const rad = Math.atan2(deltaLng, deltaLat);
+    const segmentBearing = rad*180/Math.PI;
+
     marker.setLatLng([newLat,newLon]);
-    marker.setRotationAngle(startBearing + deltaBearing*t);
+    marker.setRotationAngle(segmentBearing);
 
     if(t<1) requestAnimationFrame(animate);
   }
@@ -186,7 +182,6 @@ async function updateVehicles(){
 
     for(const v of vehicles){
       if(v.lat == null || v.lon == null) continue;
-
       const popupContent = lerPopup(v);
 
       if(!patternsCache.has(v.pattern_id)){
@@ -222,7 +217,7 @@ async function updateVehicles(){
   }
 }
 
-// ---------------- USER LOCATION ----------------
+// ---------------- GEOLOCALIZAÇÃO ----------------
 let userMarker;
 navigator.geolocation.watchPosition(pos=>{
   const {latitude, longitude} = pos.coords;
