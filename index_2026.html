@@ -54,7 +54,7 @@ document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcad
 
 // Ícone retangular com seta e número da linha (ajustado)
 function createBusSVGIcon(line){
-  const maxWidth = 50;       // largura máxima do retângulo
+  const maxWidth = 50;
   const height = 20;
   const padding = 4;
   const arrowWidth = 10;
@@ -84,6 +84,16 @@ function traduzirStatus(status){
     case "IN_TRANSIT_TO": return "Em trânsito";
     default: return "Desconhecido";
   }
+}
+
+// Função para distância em km
+function calcularDistanciaKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
 }
 
 // Armazenar marcadores
@@ -126,12 +136,13 @@ async function obterInfoPercurso(pattern_id){
     const headsign = dados?.headsign || "não disponível";
     const path = dados?.path || [];
     const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
-    const info = { headsign, paragens };
+    const proximaParagem = path.find(p=>p.stop?.lat && p.stop?.lon)?.stop || null;
+    const info = { headsign, paragens, proximaParagem };
     cachePatterns.set(pattern_id, info);
     return info;
   }catch(err){
     console.warn("Percurso não disponível:",err);
-    const info = { headsign:"não disponível", paragens:[] };
+    const info = { headsign:"não disponível", paragens:[], proximaParagem:null };
     cachePatterns.set(pattern_id, info);
     return info;
   }
@@ -144,19 +155,29 @@ async function carregarAutocarros(){
       .then(res=>res.json());
 
     veiculos.forEach(async v=>{
-      const {id,line_id,lat,lon,bearing,current_status,timestamp,pattern_id} = v;
+      const {id,line_id,lat,lon,bearing,current_status,speed,timestamp,pattern_id} = v;
       if(!lat || !lon) return;
 
       const estado = traduzirStatus(current_status);
       const horaAtual = new Date(timestamp*1000).toLocaleTimeString("pt-PT",{hour12:false});
-      const {headsign, paragens} = await obterInfoPercurso(pattern_id);
+      const {headsign, paragens, proximaParagem} = await obterInfoPercurso(pattern_id);
+
+      let tempoEstimado = "não disponível";
+      const velocidadeKmH = speed ? Math.round(speed*3.6) : 0;
+      if(proximaParagem && velocidadeKmH>0){
+        const distKm = calcularDistanciaKm(lat,lon,proximaParagem.lat,proximaParagem.lon);
+        const minutos = Math.round((distKm/velocidadeKmH)*60);
+        tempoEstimado = `${minutos} min`;
+      }
 
       const popupHTML = `
         🚌 <strong>Autocarro ${id}</strong><br>
         <b>Linha:</b> ${line_id}<br>
         <b>Destino:</b> ${headsign}<br>
+        <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
         <b>Estado:</b> ${estado}<br>
         <b>Atualização:</b> ${horaAtual}<br>
+        <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
         <b>Próximas paragens:</b><br>${paragens.join("<br>")}
       `;
 
