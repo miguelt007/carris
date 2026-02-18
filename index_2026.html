@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Carris Metropolitana – Live (v2 API)</title>
+<title>Carris Metropolitana – Live v2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
@@ -25,166 +25,127 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 <script>
 
-// ---------- MAP SETUP ----------
+// ---------------- MAPA ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:"© OpenStreetMap contributors"
-}).addTo(map);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"© OpenStreetMap contributors" }).addTo(map);
 
-
-// ---------- ICON FACTORY ----------
+// ---------------- ICON FACTORY ----------------
 function createBusSVGIcon(line){
-  const maxWidth = 46;
-  const height = 20;
-  const padding = 3;
-  const arrowW = 10;
-  const rectW = Math.min(30 + line.length*5, maxWidth);
-  const fontSize = (line.length>3)?10:12;
+  const maxWidth=46, height=20, padding=3, arrowW=10;
+  const rectW=Math.min(30 + line.length*5, maxWidth);
+  const fontSize=(line.length>3)?10:12;
 
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg"
-         width="${rectW + arrowW}" height="${height}">
-      <rect x="0" y="0" width="${rectW}" height="${height}"
-            fill="#FFD100" stroke="black" rx="3" ry="3"/>
-      <text x="${padding}" y="${height/2+5}" font-size="${fontSize}"
-            font-family="Arial" font-weight="bold" fill="black">
-        ${line}
-      </text>
-      <polygon points="${rectW},${height/2-5} ${rectW},${height/2+5} ${rectW+arrowW},${height/2}"
-               fill="black"/>
-    </svg>`;
-  
-  return L.icon({
-    iconUrl: "data:image/svg+xml;base64,"+btoa(svg),
-    iconSize: [rectW+arrowW, height],
-    iconAnchor: [(rectW+arrowW)/2, height/2]
-  });
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${rectW+arrowW}" height="${height}">
+    <rect x="0" y="0" width="${rectW}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
+    <text x="${padding}" y="${height/2+5}" font-size="${fontSize}" font-family="Arial" font-weight="bold" fill="black">${line}</text>
+    <polygon points="${rectW},${height/2-5} ${rectW},${height/2+5} ${rectW+arrowW},${height/2}" fill="black"/>
+  </svg>`;
+  return L.icon({iconUrl:"data:image/svg+xml;base64,"+btoa(svg), iconSize:[rectW+arrowW,height], iconAnchor:[(rectW+arrowW)/2,height/2]});
 }
 
-
-// ---------- UTILS ----------
+// ---------------- UTILS ----------------
 function traduzirStatus(s){
-  switch(s){
-    case "INCOMING_AT": return "A chegar";
-    case "STOPPED_AT": return "Parado";
-    case "IN_TRANSIT_TO": return "Em trânsito";
-    default: return s||"Desconhecido";
-  }
+  switch(s){ case "INCOMING_AT": return "A chegar"; case "STOPPED_AT": return "Parado"; case "IN_TRANSIT_TO": return "Em trânsito"; default: return s||"Desconhecido"; }
 }
-function calcDistKm(lat1,lon1,lat2,lon2){
-  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R;
+function calcDistKm(lat1,lon1,lat2,lon2){ const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180; const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function interp(p1,p2,t){ return [lerp(p1[0],p2[0],t),lerp(p1[1],p2[1],t)]; }
+function shortestAngle(from,to){ let delta=to-from; while(delta>180) delta-=360; while(delta<-180) delta+=360; return from+delta; }
+
+// ---------------- STOPS ----------------
+let stopMap = new Map();
+async function loadStops(){
+  try{
+    const res = await fetch("https://api.carrismetropolitana.pt/v2/stops");
+    const data = await res.json();
+    data.forEach(s => stopMap.set(s.id,{name:s.name,lat:s.lat,lon:s.lon}));
+  }catch(e){ console.warn("Erro stops:",e); }
 }
+loadStops();
 
-
-// ---------- PATTERN CACHE ----------
-const cachePatterns = new Map();
+// ---------------- PATTERNS ----------------
+const patternCache = new Map();
 async function fetchPattern(pattern_id){
-  if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
-
+  if(patternCache.has(pattern_id)) return patternCache.get(pattern_id);
   try{
     const res = await fetch(`https://api.carrismetropolitana.pt/v2/patterns/${pattern_id}`);
-    if(!res.ok) throw new Error("sem pattern");
+    if(!res.ok) throw new Error("pattern fail");
     const data = await res.json();
-    // preprocess
-    const paragens = (data.path||[])
-      .map(p=>p.stop && {name:p.stop.name, lat:p.stop.lat, lon:p.stop.lon})
-      .filter(Boolean);
-    const info={ headsign:data.headsign||"", paragens };
-    cachePatterns.set(pattern_id, info);
+    const paragens=(data.path||[]).map(p=>p.stop && {name:p.stop.name,lat:p.stop.lat,lon:p.stop.lon}).filter(Boolean);
+    const info={headsign:data.headsign||"",paragens};
+    patternCache.set(pattern_id,info);
     return info;
-  } catch(e){
-    cachePatterns.set(pattern_id,{headsign:"---",paragens:[]});
-    return {headsign:"---",paragens:[]};
-  }
+  }catch(e){ patternCache.set(pattern_id,{headsign:"---",paragens:[]}); return {headsign:"---",paragens:[]}; }
 }
 
-
-// ---------- VEHICLE MARKERS ----------
+// ---------------- VEHICLE MARKERS ----------------
 const markers = new Map();
 
 async function updateVehicles(){
   try{
-    const veics = await fetch("https://api.carrismetropolitana.pt/v2/vehicles")
-                        .then(r=>r.json());
-    
-    veics.forEach(async v=>{
+    const veics = await fetch("https://api.carrismetropolitana.pt/v2/vehicles").then(r=>r.json());
 
-      const {id,lat,lon,bearing,current_status,pattern_id,speed,timestamp} = v;
+    veics.forEach(async v=>{
+      const {id,lat,lon,bearing,current_status,pattern_id,speed,timestamp,line_id} = v;
       if(lat==null||lon==null) return;
 
       const estado=traduzirStatus(current_status);
       const hora=new Date(timestamp*1000).toLocaleTimeString("pt-PT",{hour12:false});
-
-      const {headsign,paragens} = await fetchPattern(pattern_id);
+      const {headsign,paragens}=await fetchPattern(pattern_id);
 
       let tempo="n/a", velKmH = speed?Math.round(speed*3.6):0;
-      if(paragens && paragens.length>0 && velKmH>0){
-        const prox = paragens[0];
-        const dKm = calcDistKm(lat,lon,prox.lat,prox.lon);
+      let proxParagens = paragens.slice(0,5);
+      if(proxParagens.length>0 && velKmH>0){
+        const dKm = calcDistKm(lat,lon,proxParagens[0].lat,proxParagens[0].lon);
         tempo = Math.round((dKm/velKmH)*60)+" min";
       }
 
       const popup = `
-        🚌 <b>Linha:</b> ${v.line_id || "?"}<br>
+        🚌 <b>Linha:</b> ${line_id || "?"}<br>
         <b>Destino:</b> ${headsign}<br>
         <b>Velocidade:</b> ${velKmH} km/h<br>
         <b>Estado:</b> ${estado}<br>
         <b>Atualização:</b> ${hora}<br>
         <b>Tempo até próxima parada:</b> ${tempo}<br>
         <br><b>Próximas paragens:</b><br>
-        ${(paragens.map(p=>p.name)).slice(0,5).join("<br>")}
+        ${proxParagens.map(p=>p.name).join("<br>")}
       `;
 
-      // cria ou atualiza
       if(!markers.has(id)){
-        const icon = createBusSVGIcon(v.line_id||"?");
-        const m = L.marker([lat,lon],{
-          icon, rotationAngle:bearing||0, rotationOrigin:"center"
-        }).addTo(map);
+        const icon = createBusSVGIcon(line_id||"?");
+        const m = L.marker([lat,lon],{icon,rotationAngle:bearing||0,rotationOrigin:"center"}).addTo(map);
         m.bindPopup(popup);
         markers.set(id,{marker:m,currentPos:[lat,lon],currentAngle:bearing||0,anim:null});
       } else {
         const obj = markers.get(id);
         obj.marker._popup.setContent(popup);
-        // posição + bearing suave
-        animate(obj, [lat,lon], bearing||0);
+        smoothMove(obj,[lat,lon],bearing||0);
       }
     });
 
-  }catch(err){
-    console.error("Erro v2 vehicles:",err);
-  }
+  }catch(e){ console.error("Erro v2 vehicles:",e); }
 }
 
-
-// ---------- SMOOTH MOVEMENT ----------
-function lerp(a,b,t){return a+(b-a)*t;}
-function interp(p1,p2,t){return [lerp(p1[0],p2[0],t),lerp(p1[1],p2[1],t)];}
-
-function animate(obj,newPos,newAng,duration=30000){
-  const start = performance.now(),
-        fromPos = obj.currentPos.slice(),
-        fromAng = obj.currentAngle!=null?obj.currentAngle:newAng;
-
+// ---------------- SMOOTH MOVEMENT ----------------
+function smoothMove(obj,newPos,newAng,duration=30000){
+  const start=performance.now(), fromPos=obj.currentPos.slice(), fromAng=obj.currentAngle;
   if(obj.anim) cancelAnimationFrame(obj.anim);
 
   function frame(ts){
-    const t = Math.min((ts-start)/duration,1);
-    const p = interp(fromPos,newPos,t),
-          a = lerp(fromAng,newAng,t);
+    const t=Math.min((ts-start)/duration,1);
+    const p=interp(fromPos,newPos,t);
+    const a=shortestAngle(fromAng,newAng);
+    const ang=lerp(fromAng,a,t);
     obj.marker.setLatLng(p);
-    obj.marker.setRotationAngle(a);
-    obj.currentPos = p;
-    obj.currentAngle = a;
-    if(t<1) obj.anim = requestAnimationFrame(frame);
+    obj.marker.setRotationAngle(ang);
+    obj.currentPos=p;
+    obj.currentAngle=ang;
+    if(t<1) obj.anim=requestAnimationFrame(frame);
   }
-  obj.anim = requestAnimationFrame(frame);
+  obj.anim=requestAnimationFrame(frame);
 }
 
-
-// ---------- START & INTERVAL ----------
+// ---------------- START ----------------
 updateVehicles();
 setInterval(updateVehicles,30000);
 
