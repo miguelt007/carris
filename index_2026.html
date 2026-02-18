@@ -26,13 +26,28 @@ html,body{
   border-radius:10px;
   color:white;
   font-weight:bold;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.live-dot{
+  width:12px;
+  height:12px;
+  background:#00ff2a;
+  border-radius:50%;
+  animation:blink 1s infinite;
+}
+@keyframes blink{
+  0%,100%{opacity:1;}
+  50%{opacity:0.3;}
 }
 </style>
 </head>
 <body>
 
 <div id="header">
-Carris Metropolitana – Live
+  <div class="live-dot"></div>
+  Carris Metropolitana – Live
 </div>
 
 <div id="map"></div>
@@ -41,39 +56,25 @@ Carris Metropolitana – Live
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 
 <script>
-
-// MAPA
+// ---------------- MAP ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 12);
-
 L.tileLayer(
   "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { attribution:"© OpenStreetMap" }
+  { attribution:"© OpenStreetMap contributors" }
 ).addTo(map);
 
-
-// ÍCONE
+// ---------------- ICON ----------------
 function createBusIcon(line){
-
   const h = 20;
   const rectW = 30 + (line ? line.length*6 : 10);
   const arrowW = 10;
   const w = rectW + arrowW;
 
   const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg"
-       width="${w}" height="${h}">
-    <rect width="${rectW}" height="${h}"
-          fill="#FFD100" stroke="black"
-          rx="4"/>
-    <text x="6" y="${h/2+5}"
-          font-size="12"
-          font-weight="bold">
-      ${line || "?"}
-    </text>
-    <polygon points="${rectW},${h/2-5}
-                     ${rectW},${h/2+5}
-                     ${w},${h/2}"
-             fill="black"/>
+  <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <rect width="${rectW}" height="${h}" fill="#FFD100" stroke="black" rx="4"/>
+    <text x="6" y="${h/2+5}" font-size="12" font-weight="bold">${line || "?"}</text>
+    <polygon points="${rectW},${h/2-5} ${rectW},${h/2+5} ${w},${h/2}" fill="black"/>
   </svg>`;
 
   return L.icon({
@@ -83,67 +84,65 @@ function createBusIcon(line){
   });
 }
 
+// ---------------- UTILS ----------------
+function traduzirStatus(status){
+  switch(status){
+    case "INCOMING_AT": return "A chegar à paragem";
+    case "STOPPED_AT": return "Parado na paragem";
+    case "IN_TRANSIT_TO": return "Em trânsito";
+    default: return status;
+  }
+}
 
-// VEÍCULOS
+// ---------------- VEHICLES ----------------
 const markers = new Map();
 
 async function updateVehicles(){
-
   try{
-
     const vehicles = await fetch(
       "https://api.carrismetropolitana.pt/v2/vehicles"
     ).then(r=>r.json());
 
     vehicles.forEach(v=>{
-
-      if(v.lat == null || v.lon == null)
-        return;
+      if(v.lat == null || v.lon == null) return;
 
       const popup = `
         <b>ID:</b> ${v.id}<br>
-        <b>Vehicle ID:</b> ${v.vehicle_id}<br>
         <b>Linha:</b> ${v.line_id}<br>
         <b>Pattern:</b> ${v.pattern_id}<br>
         <b>Trip:</b> ${v.trip_id}<br>
-        <b>Status:</b> ${v.current_status}<br>
+        <b>Estado:</b> ${traduzirStatus(v.current_status)}<br>
         <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
-        <b>Bearing:</b> ${v.bearing}<br>
+        <b>Rumo:</b> ${v.bearing}°<br>
         <b>Stop ID:</b> ${v.stop_id}<br>
-        <b>Lat:</b> ${v.lat}<br>
-        <b>Lon:</b> ${v.lon}<br>
-        <b>Timestamp:</b> ${v.timestamp}
+        <b>Latitude:</b> ${v.lat.toFixed(6)}<br>
+        <b>Longitude:</b> ${v.lon.toFixed(6)}<br>
+        <b>Atualização:</b> ${new Date(v.timestamp*1000).toLocaleTimeString("pt-PT")}
       `;
 
       if(!markers.has(v.id)){
-
         const marker = L.marker([v.lat, v.lon],{
           icon: createBusIcon(v.line_id),
           rotationAngle: v.bearing || 0,
           rotationOrigin: "center center"
         }).addTo(map);
-
         marker.bindPopup(popup);
-
         markers.set(v.id, marker);
-
       } else {
-
         const m = markers.get(v.id);
         m.setLatLng([v.lat,v.lon]);
         m.setRotationAngle(v.bearing || 0);
         m.getPopup().setContent(popup);
       }
-
     });
-
   } catch(e){
     console.error("Erro API:", e);
   }
 }
 
+// ---------------- START ----------------
 updateVehicles();
-setInterval(updateVehicles, 30000);
+setInterval(updateVehicles,30000);
 
 </script>
 </body>
