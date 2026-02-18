@@ -8,6 +8,7 @@
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 #map { height:100%; width:100%; }
+
 #header {
   position:absolute; top:10px; left:50%; transform:translateX(-50%);
   z-index:1000; background: rgba(0,0,0,0.5); padding:10px 20px; border-radius:10px;
@@ -17,7 +18,18 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 .live-indicator { width:12px; height:12px; background:#27ae60; border-radius:50%; animation:blink 1s infinite; }
 @keyframes blink { 0%,50%,100%{opacity:1;} 25%,75%{opacity:0.2;} }
 
-.bus-container { display:flex; align-items:center; justify-content:flex-start; height:30px; transform-origin:center; }
+#botao-centro {
+  position:absolute; bottom:20px; right:20px; z-index:999;
+  background:white; border:2px solid #333; border-radius:50%; width:48px; height:48px;
+  font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
+}
+.leaflet-popup-content { max-height:250px; overflow-y:auto; }
+
+/* Ícone do autocarro */
+.bus-icon {
+  display:flex; align-items:center; justify-content:flex-start; height:30px;
+  transform-origin:center;
+}
 .bus-rect {
   background:#FFD100; color:black; font-weight:bold; font-size:14px;
   padding:0 6px; border-radius:4px; display:flex; align-items:center; justify-content:center;
@@ -27,13 +39,6 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
   width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
   border-bottom:10px solid black; margin-left:4px;
 }
-
-#botao-centro {
-  position:absolute; bottom:20px; right:20px; z-index:999;
-  background:white; border:2px solid #333; border-radius:50%; width:48px; height:48px;
-  font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
-}
-.leaflet-popup-content { max-height:250px; overflow-y:auto; }
 </style>
 </head>
 <body>
@@ -47,7 +52,7 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 <script>
-// Inicializar mapa imediatamente
+// Inicializar mapa
 const map = L.map('map').setView([38.736946, -9.142685], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap contributors'
@@ -100,16 +105,13 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Ícone retangular giratório
-function createBusIcon(line,bearing){
+// Criar ícone do autocarro
+function createBusIcon(line){
   return L.divIcon({
     className:'bus-wrapper',
-    html:`<div class="bus-container" style="transform: rotate(${bearing||0}deg)">
-      <div class="bus-rect">${line}</div>
-      <div class="bus-arrow"></div>
-    </div>`,
+    html:`<div class="bus-icon"><div class="bus-rect">${line}</div><div class="bus-arrow"></div></div>`,
     iconSize:[50,30],
-    iconAnchor:[5,15]
+    iconAnchor:[25,15]
   });
 }
 
@@ -120,7 +122,7 @@ async function carregarAutocarros(){
     if(!veiculos || !Array.isArray(veiculos)) return;
 
     veiculos.forEach(async v=>{
-      if(!v || !v.lat || !v.lon) return; // Ignorar veículos inválidos
+      if(!v || !v.lat || !v.lon) return;
       const {lat,lon,id,line_id,speed,bearing,current_status,pattern_id,timestamp} = v;
 
       const velocidadeKmH = speed?Math.round(speed*3.6):0;
@@ -130,7 +132,7 @@ async function carregarAutocarros(){
 
       const {headsign,paragens,proximaParagem} = await obterInfoPercurso(pattern_id);
 
-      let tempoEstimado="não disponível";
+      let tempoEstimado = "não disponível";
       if(proximaParagem && velocidadeKmH>0){
         const distKm = calcularDistanciaKm(lat,lon,proximaParagem.lat,proximaParagem.lon);
         const minutos = Math.round((distKm/velocidadeKmH)*60);
@@ -139,8 +141,8 @@ async function carregarAutocarros(){
 
       if(marcadoresBuses.has(id)){
         const m = marcadoresBuses.get(id);
-        m.setRotationAngle(bearing||0);
         m.setLatLng([lat,lon]);
+        m.setRotationAngle(bearing||0);
         if(m._popup) m._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
@@ -153,7 +155,12 @@ async function carregarAutocarros(){
           <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
       } else {
-        const marcador = L.marker([lat,lon],{icon:createBusIcon(line_id,bearing||0)}).addTo(map);
+        const marcador = L.marker([lat,lon],{
+          icon:createBusIcon(line_id),
+          rotationAngle: bearing||0,
+          rotationOrigin: 'center'
+        }).addTo(map);
+
         marcador.bindPopup(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
@@ -165,6 +172,7 @@ async function carregarAutocarros(){
           <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
           <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
         `);
+
         marcadoresBuses.set(id,marcador);
       }
     });
@@ -174,7 +182,6 @@ async function carregarAutocarros(){
 // Inicializa
 carregarAutocarros();
 setInterval(carregarAutocarros,30000);
-
 </script>
 </body>
 </html>
