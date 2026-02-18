@@ -2,23 +2,31 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carris Metropolitana – Live</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
-#map{height:100%;width:100%;}
+html,body{
+  margin:0;
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
+}
+#map{
+  height:100%;
+  width:100%;
+}
 #header{
   position:absolute;
-  top:12px;
+  top:15px;
   left:50%;
   transform:translateX(-50%);
   z-index:1000;
-  background:rgba(0,0,0,0.7);
-  padding:10px 20px;
-  border-radius:10px;
+  background:rgba(0,0,0,0.75);
+  padding:12px 22px;
+  border-radius:12px;
   color:white;
   font-size:18px;
   font-weight:bold;
@@ -27,8 +35,9 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
   gap:10px;
 }
 .live-dot{
-  width:12px;height:12px;
-  background:#1eff00;
+  width:12px;
+  height:12px;
+  background:#00ff2a;
   border-radius:50%;
   animation:blink 1s infinite;
 }
@@ -53,7 +62,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
 <script>
 
 // ---------------- MAP ----------------
-const map = L.map('map').setView([38.736946, -9.142685], 13);
+const map = L.map('map').setView([38.736946, -9.142685], 12);
 
 L.tileLayer(
   "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -65,12 +74,13 @@ L.tileLayer(
 function createBusIcon(line){
 
   const height = 20;
-  const rectW = 30 + line.length * 6;
+  const rectW = 30 + (line.length * 6);
   const arrowW = 10;
+  const totalW = rectW + arrowW;
 
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg"
-       width="${rectW+arrowW}" height="${height}">
+       width="${totalW}" height="${height}">
     <rect x="0" y="0"
           width="${rectW}"
           height="${height}"
@@ -87,14 +97,16 @@ function createBusIcon(line){
     </text>
     <polygon points="${rectW},${height/2-5}
                      ${rectW},${height/2+5}
-                     ${rectW+arrowW},${height/2}"
+                     ${totalW},${height/2}"
              fill="black"/>
   </svg>`;
 
   return L.icon({
     iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
-    iconSize:[rectW+arrowW,height],
-    iconAnchor:[(rectW+arrowW)/2,height/2]
+    iconSize:[totalW,height],
+
+    // 🔥 rotação correta na ponta da seta
+    iconAnchor:[totalW, height/2]
   });
 }
 
@@ -103,14 +115,17 @@ function createBusIcon(line){
 function lerp(a,b,t){ return a+(b-a)*t; }
 
 function interp(p1,p2,t){
-  return [lerp(p1[0],p2[0],t), lerp(p1[1],p2[1],t)];
+  return [
+    lerp(p1[0],p2[0],t),
+    lerp(p1[1],p2[1],t)
+  ];
 }
 
 function shortestAngle(from,to){
   let delta = to-from;
-  while(delta>180) delta-=360;
-  while(delta<-180) delta+=360;
-  return from+delta;
+  while(delta > 180) delta -= 360;
+  while(delta < -180) delta += 360;
+  return from + delta;
 }
 
 
@@ -119,7 +134,8 @@ const patternCache = new Map();
 
 async function fetchPattern(pattern_id){
 
-  if(!pattern_id) return {headsign:"",paragens:[]};
+  if(!pattern_id)
+    return {headsign:"", paragens:[]};
 
   if(patternCache.has(pattern_id))
     return patternCache.get(pattern_id);
@@ -132,6 +148,7 @@ async function fetchPattern(pattern_id){
 
     const data = await res.json();
 
+    // 🔥 Estrutura correta v2
     const paragens = (data.path || [])
       .map(p => p.stop)
       .filter(Boolean);
@@ -145,7 +162,8 @@ async function fetchPattern(pattern_id){
     return info;
 
   } catch(e){
-    return {headsign:"",paragens:[]};
+    console.error("Erro pattern:", e);
+    return {headsign:"", paragens:[]};
   }
 }
 
@@ -163,44 +181,38 @@ async function updateVehicles(){
 
     vehicles.forEach(async v=>{
 
-      const lat = v.lat;
-      const lon = v.lon;
+      if(v.lat == null || v.lon == null)
+        return;
 
-      if(lat==null || lon==null) return;
+      const angle = v.bearing || 0;
 
-      // Detecta automaticamente bearing
-      const angle =
-        v.bearing ??
-        v.heading ??
-        v.direction ??
-        0;
-
-      const {headsign,paragens} =
+      const {headsign, paragens} =
         await fetchPattern(v.pattern_id);
 
       const popup = `
         🚌 <b>Linha:</b> ${v.line_id || "?"}<br>
         <b>Destino:</b> ${headsign}<br>
         <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
+        <b>Estado:</b> ${v.current_status}<br>
         <br><b>Próximas paragens:</b><br>
         ${paragens.slice(0,5).map(p=>p.name).join("<br>")}
       `;
 
       if(!markers.has(v.id)){
 
-        const icon = createBusIcon(v.line_id||"?");
+        const icon = createBusIcon(v.line_id || "?");
 
-        const m = L.marker([lat,lon],{
+        const marker = L.marker([v.lat, v.lon], {
           icon,
-          rotationAngle:angle,
-          rotationOrigin:"center center"
+          rotationAngle: angle,
+          rotationOrigin: "center center"
         }).addTo(map);
 
-        m.bindPopup(popup);
+        marker.bindPopup(popup);
 
         markers.set(v.id,{
-          marker:m,
-          pos:[lat,lon],
+          marker,
+          pos:[v.lat,v.lon],
           ang:angle,
           anim:null
         });
@@ -210,13 +222,13 @@ async function updateVehicles(){
         const obj = markers.get(v.id);
         obj.marker._popup.setContent(popup);
 
-        smoothMove(obj,[lat,lon],angle);
+        smoothMove(obj, [v.lat,v.lon], angle);
       }
 
     });
 
-  }catch(e){
-    console.error("Erro vehicles:",e);
+  } catch(e){
+    console.error("Erro vehicles:", e);
   }
 }
 
@@ -229,7 +241,8 @@ function smoothMove(obj,newPos,newAng,duration=30000){
   const fromAng = obj.ang;
   const targetAng = shortestAngle(fromAng,newAng);
 
-  if(obj.anim) cancelAnimationFrame(obj.anim);
+  if(obj.anim)
+    cancelAnimationFrame(obj.anim);
 
   function frame(ts){
 
