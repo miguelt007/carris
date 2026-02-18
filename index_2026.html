@@ -109,19 +109,30 @@ function animateMarker(mObj, newPos, newAngle, duration=30000){
   mObj.animFrame = requestAnimationFrame(frame);
 }
 
+// Calcular bearing real entre duas posições
+function calculateBearing(lat1, lon1, lat2, lon2){
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const y = Math.sin(dLon) * Math.cos(lat2*Math.PI/180);
+  const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) -
+            Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+  return (Math.atan2(y,x) * 180/Math.PI + 360) % 360;
+}
+
 // Dados simulados
 let testVehicles = [
-  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,bearing:90,current_status:"IN_TRANSIT_TO"},
-  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,bearing:180,current_status:"IN_TRANSIT_TO"},
-  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,bearing:270,current_status:"IN_TRANSIT_TO"}
+  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,current_status:"IN_TRANSIT_TO"},
+  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,current_status:"IN_TRANSIT_TO"},
+  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,current_status:"IN_TRANSIT_TO"}
 ];
 
 // Atualiza posições de teste a cada 30s
 function moveMockVehicles(){
   testVehicles.forEach(v=>{
+    v.prevLat = v.lat;
+    v.prevLon = v.lon;
     v.lat += (Math.random()-0.5)*0.0015;
     v.lon += (Math.random()-0.5)*0.0015;
-    v.bearing = (v.bearing + Math.floor(Math.random()*20-10)) % 360;
+    // Bearing será calculado depois
   });
 }
 
@@ -129,7 +140,7 @@ function moveMockVehicles(){
 async function carregarAutocarros(){
   moveMockVehicles();
   testVehicles.forEach(v=>{
-    const {id, line_id, lat, lon, bearing, current_status} = v;
+    const {id, line_id, lat, lon, prevLat, prevLon, current_status} = v;
     const headsign = "Teste destino";
     const paragens = ["Paragem A","Paragem B","Paragem C"];
     const estado = traduzirStatus(current_status);
@@ -144,20 +155,20 @@ async function carregarAutocarros(){
       <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
     `;
 
+    const realBearing = prevLat != null ? calculateBearing(prevLat, prevLon, lat, lon) : 0;
+
     if(!marcadoresBuses.has(id)){
-      // Cria marcador diretamente na posição inicial
       const marker = L.marker([lat, lon], {
         icon: createBusSVGIcon(line_id),
-        rotationAngle: bearing||0,
+        rotationAngle: realBearing,
         rotationOrigin:'center'
       }).addTo(map);
       marker.bindPopup(popupHTML);
-      marcadoresBuses.set(id,{marker,currentPos:[lat,lon],currentAngle:bearing||0,animFrame:null});
+      marcadoresBuses.set(id,{marker,currentPos:[lat,lon],currentAngle:realBearing,animFrame:null});
     } else {
-      // Atualiza popup e anima suavemente
       const mObj = marcadoresBuses.get(id);
       mObj.marker._popup.setContent(popupHTML);
-      animateMarker(mObj, [lat, lon], bearing||0, 30000);
+      animateMarker(mObj, [lat, lon], realBearing, 30000);
     }
   });
 }
