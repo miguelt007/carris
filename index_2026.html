@@ -8,13 +8,13 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html,body{
+html, body {
   margin:0;
   height:100%;
+  font-family: Arial, sans-serif;
   overflow:hidden;
-  font-family:Arial;
 }
-#map{ height:100%; }
+#map { height:100%; }
 #header{
   position:absolute;
   top:15px;
@@ -97,28 +97,46 @@ function traduzirStatus(status){
 // ---------------- VEHICLES ----------------
 const markers = new Map();
 
+function lerPopup(v){
+  return `
+    <b>ID:</b> ${v.id}<br>
+    <b>Linha:</b> ${v.line_id}<br>
+    <b>Pattern:</b> ${v.pattern_id}<br>
+    <b>Trip:</b> ${v.trip_id}<br>
+    <b>Estado:</b> ${traduzirStatus(v.current_status)}<br>
+    <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
+    <b>Rumo:</b> ${v.bearing}°<br>
+    <b>Stop ID:</b> ${v.stop_id}<br>
+    <b>Portas:</b> ${v.door_status}<br>
+    <b>Agência:</b> ${v.agency_id}<br>
+    <b>Veículo:</b> ${v.make} ${v.model} (${v.license_plate})<br>
+    <b>Capacidade:</b> ${v.capacity_total} total 
+      (${v.capacity_seated} sentados, ${v.capacity_standing} em pé)<br>
+    <b>Permite bicicletas:</b> ${v.bikes_allowed ? "Sim" : "Não"}<br>
+    <b>Contactless:</b> ${v.contactless ? "Sim" : "Não"}<br>
+    <b>Acessível cadeira de rodas:</b> ${v.wheelchair_accessible ? "Sim" : "Não"}<br>
+    <b>Propulsão:</b> ${v.propulsion}<br>
+    <b>Proprietário:</b> ${v.owner}<br>
+    <b>Data registo:</b> ${v.registration_date}<br>
+    <b>Block ID:</b> ${v.block_id}<br>
+    <b>Event ID:</b> ${v.event_id}<br>
+    <b>Route ID:</b> ${v.route_id}<br>
+    <b>Schedule:</b> ${v.schedule_relationship}<br>
+    <b>Shift ID:</b> ${v.shift_id}<br>
+    <b>Lat:</b> ${v.lat.toFixed(6)}<br>
+    <b>Lon:</b> ${v.lon.toFixed(6)}<br>
+    <b>Atualização:</b> ${new Date(v.timestamp*1000).toLocaleTimeString("pt-PT")}
+  `;
+}
+
+// ---------------- UPDATE ----------------
 async function updateVehicles(){
   try{
-    const vehicles = await fetch(
-      "https://api.carrismetropolitana.pt/v2/vehicles"
-    ).then(r=>r.json());
+    const vehicles = await fetch("https://api.carrismetropolitana.pt/v2/vehicles")
+      .then(r=>r.json());
 
     vehicles.forEach(v=>{
       if(v.lat == null || v.lon == null) return;
-
-      const popup = `
-        <b>ID:</b> ${v.id}<br>
-        <b>Linha:</b> ${v.line_id}<br>
-        <b>Pattern:</b> ${v.pattern_id}<br>
-        <b>Trip:</b> ${v.trip_id}<br>
-        <b>Estado:</b> ${traduzirStatus(v.current_status)}<br>
-        <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
-        <b>Rumo:</b> ${v.bearing}°<br>
-        <b>Stop ID:</b> ${v.stop_id}<br>
-        <b>Latitude:</b> ${v.lat.toFixed(6)}<br>
-        <b>Longitude:</b> ${v.lon.toFixed(6)}<br>
-        <b>Atualização:</b> ${new Date(v.timestamp*1000).toLocaleTimeString("pt-PT")}
-      `;
 
       if(!markers.has(v.id)){
         const marker = L.marker([v.lat, v.lon],{
@@ -126,15 +144,17 @@ async function updateVehicles(){
           rotationAngle: v.bearing || 0,
           rotationOrigin: "center center"
         }).addTo(map);
-        marker.bindPopup(popup);
+        marker.bindPopup(lerPopup(v));
         markers.set(v.id, marker);
       } else {
         const m = markers.get(v.id);
+        // movimento suave
         m.setLatLng([v.lat,v.lon]);
         m.setRotationAngle(v.bearing || 0);
-        m.getPopup().setContent(popup);
+        m.getPopup().setContent(lerPopup(v));
       }
     });
+
   } catch(e){
     console.error("Erro API:", e);
   }
