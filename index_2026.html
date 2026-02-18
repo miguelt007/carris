@@ -8,16 +8,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-html,body{
-  margin:0;
-  height:100%;
-  overflow:hidden;
-  font-family:Arial, sans-serif;
-}
-#map{
-  height:100%;
-  width:100%;
-}
+html,body{margin:0;height:100%;overflow:hidden;font-family:Arial;}
+#map{height:100%;width:100%;}
 #header{
   position:absolute;
   top:12px;
@@ -35,8 +27,7 @@ html,body{
   gap:10px;
 }
 .live-dot{
-  width:12px;
-  height:12px;
+  width:12px;height:12px;
   background:#1eff00;
   border-radius:50%;
   animation:blink 1s infinite;
@@ -61,22 +52,21 @@ html,body{
 
 <script>
 
-// ---------------- MAPA ----------------
+// ---------------- MAP ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 13);
 
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution:"© OpenStreetMap contributors"
-}).addTo(map);
+L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { attribution:"© OpenStreetMap contributors" }
+).addTo(map);
 
 
-// ---------------- ICON FACTORY ----------------
+// ---------------- ICON ----------------
 function createBusIcon(line){
 
   const height = 20;
-  const padding = 6;
+  const rectW = 30 + line.length * 6;
   const arrowW = 10;
-  const rectW = 28 + (line.length * 6);
-  const fontSize = line.length > 3 ? 10 : 12;
 
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg"
@@ -87,9 +77,9 @@ function createBusIcon(line){
           fill="#FFD100"
           stroke="black"
           rx="4" ry="4"/>
-    <text x="${padding}"
+    <text x="6"
           y="${height/2+5}"
-          font-size="${fontSize}"
+          font-size="12"
           font-family="Arial"
           font-weight="bold"
           fill="black">
@@ -109,68 +99,19 @@ function createBusIcon(line){
 }
 
 
-// ---------------- UTIL ----------------
-function traduzirStatus(s){
-  switch(s){
-    case "INCOMING_AT": return "A chegar";
-    case "STOPPED_AT": return "Parado";
-    case "IN_TRANSIT_TO": return "Em trânsito";
-    default: return s || "Desconhecido";
-  }
-}
-
-function calcDistKm(lat1,lon1,lat2,lon2){
-  const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180)*
-    Math.cos(lat2*Math.PI/180)*
-    Math.sin(dLon/2)**2;
-  return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R;
-}
-
+// ---------------- UTILS ----------------
 function lerp(a,b,t){ return a+(b-a)*t; }
 
 function interp(p1,p2,t){
-  return [
-    lerp(p1[0],p2[0],t),
-    lerp(p1[1],p2[1],t)
-  ];
+  return [lerp(p1[0],p2[0],t), lerp(p1[1],p2[1],t)];
 }
 
 function shortestAngle(from,to){
-  let delta = to - from;
-  while(delta > 180) delta -= 360;
-  while(delta < -180) delta += 360;
-  return from + delta;
+  let delta = to-from;
+  while(delta>180) delta-=360;
+  while(delta<-180) delta+=360;
+  return from+delta;
 }
-
-
-// ---------------- STOPS CACHE ----------------
-let stopMap = new Map();
-
-async function loadStops(){
-  try{
-    const res = await fetch("https://api.carrismetropolitana.pt/v2/stops");
-    const data = await res.json();
-
-    data.forEach(s=>{
-      stopMap.set(s.id,{
-        name:s.name,
-        lat:s.lat,
-        lon:s.lon
-      });
-    });
-
-    console.log("Stops carregadas:", stopMap.size);
-
-  }catch(e){
-    console.error("Erro stops:",e);
-  }
-}
-
-loadStops();
 
 
 // ---------------- PATTERN CACHE ----------------
@@ -178,7 +119,7 @@ const patternCache = new Map();
 
 async function fetchPattern(pattern_id){
 
-  if(!pattern_id) return {headsign:"---",paragens:[]};
+  if(!pattern_id) return {headsign:"",paragens:[]};
 
   if(patternCache.has(pattern_id))
     return patternCache.get(pattern_id);
@@ -192,24 +133,19 @@ async function fetchPattern(pattern_id){
     const data = await res.json();
 
     const paragens = (data.path || [])
-      .map(p=>{
-        const stop = stopMap.get(p.stop_id);
-        if(!stop) return null;
-        return stop;
-      })
+      .map(p => p.stop)
       .filter(Boolean);
 
     const info = {
-      headsign:data.headsign || "",
+      headsign: data.headsign || "",
       paragens
     };
 
     patternCache.set(pattern_id, info);
-
     return info;
 
-  }catch(e){
-    return {headsign:"---",paragens:[]};
+  } catch(e){
+    return {headsign:"",paragens:[]};
   }
 }
 
@@ -227,74 +163,54 @@ async function updateVehicles(){
 
     vehicles.forEach(async v=>{
 
-      const {
-        id, lat, lon,
-        bearing, current_status,
-        pattern_id, speed,
-        timestamp, line_id
-      } = v;
+      const lat = v.lat;
+      const lon = v.lon;
 
       if(lat==null || lon==null) return;
 
-      const estado = traduzirStatus(current_status);
-      const hora = new Date(timestamp*1000)
-        .toLocaleTimeString("pt-PT",{hour12:false});
+      // Detecta automaticamente bearing
+      const angle =
+        v.bearing ??
+        v.heading ??
+        v.direction ??
+        0;
 
       const {headsign,paragens} =
-        await fetchPattern(pattern_id);
-
-      const velKmH = speed
-        ? Math.round(speed*3.6)
-        : 0;
-
-      let tempo = "n/a";
-      const proximas = paragens.slice(0,5);
-
-      if(proximas.length>0 && velKmH>0){
-        const dKm = calcDistKm(
-          lat,lon,
-          proximas[0].lat,
-          proximas[0].lon
-        );
-        tempo = Math.round((dKm/velKmH)*60)+" min";
-      }
+        await fetchPattern(v.pattern_id);
 
       const popup = `
-        🚌 <b>Linha:</b> ${line_id || "?"}<br>
+        🚌 <b>Linha:</b> ${v.line_id || "?"}<br>
         <b>Destino:</b> ${headsign}<br>
-        <b>Velocidade:</b> ${velKmH} km/h<br>
-        <b>Estado:</b> ${estado}<br>
-        <b>Atualização:</b> ${hora}<br>
-        <b>Tempo até próxima parada:</b> ${tempo}<br>
+        <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
         <br><b>Próximas paragens:</b><br>
-        ${proximas.map(p=>p.name).join("<br>")}
+        ${paragens.slice(0,5).map(p=>p.name).join("<br>")}
       `;
 
-      if(!markers.has(id)){
+      if(!markers.has(v.id)){
 
-        const icon = createBusIcon(line_id||"?");
+        const icon = createBusIcon(v.line_id||"?");
 
         const m = L.marker([lat,lon],{
           icon,
-          rotationAngle:bearing || 0,
-          rotationOrigin:"center"
+          rotationAngle:angle,
+          rotationOrigin:"center center"
         }).addTo(map);
 
         m.bindPopup(popup);
 
-        markers.set(id,{
+        markers.set(v.id,{
           marker:m,
-          currentPos:[lat,lon],
-          currentAngle:bearing||0,
+          pos:[lat,lon],
+          ang:angle,
           anim:null
         });
 
       } else {
 
-        const obj = markers.get(id);
+        const obj = markers.get(v.id);
         obj.marker._popup.setContent(popup);
 
-        smoothMove(obj,[lat,lon],bearing||0);
+        smoothMove(obj,[lat,lon],angle);
       }
 
     });
@@ -305,44 +221,35 @@ async function updateVehicles(){
 }
 
 
-// ---------------- MOVIMENTO SUAVE ----------------
+// ---------------- SMOOTH MOVE ----------------
 function smoothMove(obj,newPos,newAng,duration=30000){
 
   const start = performance.now();
-  const fromPos = obj.currentPos.slice();
-  const fromAng = obj.currentAngle ?? newAng;
+  const fromPos = obj.pos.slice();
+  const fromAng = obj.ang;
+  const targetAng = shortestAngle(fromAng,newAng);
 
-  const targetAng =
-    shortestAngle(fromAng,newAng);
-
-  if(obj.anim)
-    cancelAnimationFrame(obj.anim);
+  if(obj.anim) cancelAnimationFrame(obj.anim);
 
   function frame(ts){
 
-    const t =
-      Math.min((ts-start)/duration,1);
+    const t = Math.min((ts-start)/duration,1);
 
-    const pos =
-      interp(fromPos,newPos,t);
-
-    const ang =
-      lerp(fromAng,targetAng,t);
+    const pos = interp(fromPos,newPos,t);
+    const ang = lerp(fromAng,targetAng,t);
 
     obj.marker.setLatLng(pos);
     obj.marker.setRotationAngle(ang);
 
     if(t<1){
-      obj.anim =
-        requestAnimationFrame(frame);
+      obj.anim = requestAnimationFrame(frame);
     } else {
-      obj.currentPos=newPos;
-      obj.currentAngle=newAng;
+      obj.pos = newPos;
+      obj.ang = newAng;
     }
   }
 
-  obj.anim =
-    requestAnimationFrame(frame);
+  obj.anim = requestAnimationFrame(frame);
 }
 
 
@@ -351,6 +258,5 @@ updateVehicles();
 setInterval(updateVehicles,30000);
 
 </script>
-
 </body>
 </html>
