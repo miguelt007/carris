@@ -52,18 +52,23 @@ navigator.geolocation.watchPosition(pos=>{
 });
 document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
 
-// Ícone retangular com seta e número da linha
+// Ícone retangular com seta e número da linha (ajustado)
 function createBusSVGIcon(line){
-  const rectWidth = 30 + line.length*6; // ajusta ao comprimento do texto
+  const maxWidth = 50;       // largura máxima do retângulo
   const height = 20;
   const padding = 4;
   const arrowWidth = 10;
+
+  const rectWidth = Math.min(30 + line.length*6, maxWidth);
+  const fontSize = line.length > 4 ? 10 : 12;
+
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth+arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth+arrowWidth} ${height}">
     <rect x="0" y="0" width="${rectWidth}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
-    <text x="${padding}" y="${height/2 + 5}" font-size="12" text-anchor="start" fill="black" font-family="Arial" font-weight="bold">${line}</text>
+    <text x="${padding}" y="${height/2 + 5}" font-size="${fontSize}" text-anchor="start" fill="black" font-family="Arial" font-weight="bold">${line}</text>
     <polygon points="${rectWidth},${height/2 - 5} ${rectWidth},${height/2 + 5} ${rectWidth+arrowWidth},${height/2}" fill="black"/>
   </svg>`;
+  
   return L.icon({
     iconUrl: "data:image/svg+xml;base64," + btoa(svg),
     iconSize: [rectWidth + arrowWidth, height],
@@ -114,12 +119,6 @@ async function carregarAutocarros(){
   try{
     const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles")
       .then(res=>res.json());
-    
-    map.eachLayer(layer=>{
-      if(layer instanceof L.Marker && layer !== marcadorUtilizador){
-        // não remover aqui para manter animado, atualizamos posições
-      }
-    });
 
     veiculos.forEach(v=>{
       const {id,line_id,lat,lon,bearing,current_status,timestamp} = v;
