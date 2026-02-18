@@ -119,8 +119,8 @@ function interpolateLatLng(latlng1, latlng2, t){
 // Animação com requestAnimationFrame
 function animateMarker(markerObj, endPos, endAngle, duration){
   const startTime = performance.now();
-  const startPos = markerObj.currentPos;
-  const startAngle = markerObj.currentAngle;
+  const startPos = markerObj.currentPos ? markerObj.currentPos : endPos.slice();
+  const startAngle = markerObj.currentAngle != null ? markerObj.currentAngle : endAngle;
 
   if(markerObj.animationFrameId) cancelAnimationFrame(markerObj.animationFrameId);
 
@@ -128,12 +128,14 @@ function animateMarker(markerObj, endPos, endAngle, duration){
     const t = Math.min((time - startTime)/duration,1);
     const newPos = interpolateLatLng(startPos,endPos,t);
     const angle = lerp(startAngle,endAngle,t);
+
     markerObj.marker.setLatLng(newPos);
     markerObj.marker.setRotationAngle(angle);
+
     markerObj.currentPos = newPos;
     markerObj.currentAngle = angle;
 
-    if(t<1) markerObj.animationFrameId = requestAnimationFrame(frame);
+    if(t < 1) markerObj.animationFrameId = requestAnimationFrame(frame);
     else markerObj.animationFrameId = null;
   }
 
@@ -163,45 +165,36 @@ async function carregarAutocarros(){
         tempoEstimado = `${minutos} min`;
       }
 
+      const popupHTML = `
+        🚌 <strong>Autocarro ${id}</strong><br>
+        <b>Linha:</b> ${line_id}<br>
+        <b>Destino:</b> ${headsign}<br>
+        <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
+        <b>Direção:</b> ${direcao}<br>
+        <b>Estado:</b> ${estado}<br>
+        <b>Atualização:</b> ${hora}<br>
+        <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
+        <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
+      `;
+
       if(marcadoresBuses.has(id)){
         const mObj = marcadoresBuses.get(id);
         animateMarker(mObj, [lat,lon], bearing||0, 30000);
-
-        if(mObj.marker._popup) mObj.marker._popup.setContent(`
-          🚌 <strong>Autocarro ${id}</strong><br>
-          <b>Linha:</b> ${line_id}<br>
-          <b>Destino:</b> ${headsign}<br>
-          <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
-          <b>Direção:</b> ${direcao}<br>
-          <b>Estado:</b> ${estado}<br>
-          <b>Atualização:</b> ${hora}<br>
-          <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
-          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
-        `);
+        if(mObj.marker._popup) mObj.marker._popup.setContent(popupHTML);
 
       } else {
-        const marker = L.marker([lat,lon],{
+        const marker = L.marker([lat, lon], {
           icon:createBusSVGIcon(line_id),
-          rotationAngle: bearing||0,
+          rotationAngle: bearing || 0,
           rotationOrigin: 'center'
         }).addTo(map);
 
-        marker.bindPopup(`
-          🚌 <strong>Autocarro ${id}</strong><br>
-          <b>Linha:</b> ${line_id}<br>
-          <b>Destino:</b> ${headsign}<br>
-          <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
-          <b>Direção:</b> ${direcao}<br>
-          <b>Estado:</b> ${estado}<br>
-          <b>Atualização:</b> ${hora}<br>
-          <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
-          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
-        `);
+        marker.bindPopup(popupHTML);
 
         marcadoresBuses.set(id,{
           marker,
-          currentPos: [lat,lon],
-          currentAngle: bearing||0,
+          currentPos: [lat, lon],
+          currentAngle: bearing || 0,
           animationFrameId:null
         });
       }
