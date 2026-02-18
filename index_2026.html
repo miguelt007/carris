@@ -43,7 +43,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap contributors'
 }).addTo(map);
 
-// Utilizador
+// Botão para centrar no utilizador
 let marcadorUtilizador;
 navigator.geolocation.watchPosition(pos=>{
   const {latitude,longitude} = pos.coords;
@@ -52,7 +52,27 @@ navigator.geolocation.watchPosition(pos=>{
 });
 document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
 
-// Funções utilitárias
+// Função de ícone retangular com seta
+function createBusSVGIcon(line){
+  const rectWidth = 40;
+  const height = 20;
+  const padding = 4;
+  const arrowWidth = 10;
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth+arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth+arrowWidth} ${height}">
+    <rect x="0" y="0" width="${rectWidth}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
+    <text x="${padding}" y="${height/2 + 5}" font-size="12" text-anchor="start" fill="black" font-family="Arial" font-weight="bold">${line}</text>
+    <polygon points="${rectWidth},${height/2 - 5} ${rectWidth},${height/2 + 5} ${rectWidth+arrowWidth},${height/2}" fill="black"/>
+  </svg>`;
+  return L.icon({
+    iconUrl: "data:image/svg+xml;base64," + btoa(svg),
+    iconSize: [rectWidth + arrowWidth, height],
+    iconAnchor: [(rectWidth + arrowWidth)/2, height/2]
+  });
+}
+
+// Função utilitária para status
 function traduzirStatus(status){
   switch(status){
     case "INCOMING_AT": return "A chegar à paragem";
@@ -65,7 +85,7 @@ function traduzirStatus(status){
 // Cache de percursos
 const cachePatterns = new Map();
 async function obterInfoPercurso(pattern_id){
-  if(!pattern_id) return {headsign:"não disponível",paragens:[],proximaParagem:null};
+  if(!pattern_id) return {headsign:"não disponível",paragens:[]};
   if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
   try{
     const res = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
@@ -74,81 +94,56 @@ async function obterInfoPercurso(pattern_id){
     const headsign = dados?.headsign||"não disponível";
     const path = dados?.path||[];
     const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
-    const proximaParagem = path.find(p=>p.stop?.lat && p.stop?.lon)?.stop||null;
-    const info={headsign,paragens,proximaParagem};
+    const info={headsign,paragens};
     cachePatterns.set(pattern_id,info);
     return info;
-  }catch{return {headsign:"não disponível",paragens:[],proximaParagem:null};}
+  }catch{return {headsign:"não disponível",paragens:[]};}
 }
 
-// Marcadores existentes
-const marcadoresBuses = new Map();
-
-// Função de ícone SVG retangular
-function createBusSVGIcon(line){
-  const rectWidth = 40;
-  const height = 20;
-  const padding = 4;
-  const arrowWidth = 10;
-
-  const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth + arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth + arrowWidth} ${height}">
-    <rect x="0" y="0" width="${rectWidth}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
-    <text x="${padding}" y="${height/2 + 5}" font-size="12" text-anchor="start" fill="black" font-family="Arial" font-weight="bold">${line}</text>
-    <polygon points="${rectWidth},${height/2 - 5} ${rectWidth},${height/2 + 5} ${rectWidth + arrowWidth},${height/2}" fill="black"/>
-  </svg>`;
-  return L.icon({
-    iconUrl: "data:image/svg+xml;base64," + btoa(svg),
-    iconSize: [rectWidth + arrowWidth, height],
-    iconAnchor: [(rectWidth + arrowWidth)/2, height/2]
-  });
-}
-
-// Função principal de carregar e atualizar autocarros
+// Função principal de carregar autocarros
+let marcadoresBuses = [];
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
     if(!veiculos || !Array.isArray(veiculos)) return;
 
-    veiculos.forEach(async v => {
-      if(!v || !v.lat || !v.lon) return;
-      const {lat, lon, id, line_id, bearing, current_status, pattern_id} = v;
+    // Remove todos os marcadores antigos
+    marcadoresBuses.forEach(m => map.removeLayer(m));
+    marcadoresBuses = [];
 
-      const horaFormatada = new Date().toLocaleTimeString("pt-PT", {hour12:false});
-      const estado = traduzirStatus(current_status);
+    // Adiciona novos marcadores
+    veiculos.forEach(async v=>{
+      if(!v.lat || !v.lon) return;
+      const {lat, lon, id, line_id, bearing, current_status, pattern_id} = v;
       const {headsign, paragens} = await obterInfoPercurso(pattern_id);
+      const estado = traduzirStatus(current_status);
+      const horaAtual = new Date().toLocaleTimeString("pt-PT",{hour12:false});
 
       const popupHTML = `
         🚌 <strong>Autocarro ${id}</strong><br>
         <b>Linha:</b> ${line_id}<br>
         <b>Destino:</b> ${headsign}<br>
         <b>Estado:</b> ${estado}<br>
-        <b>Atualização:</b> ${horaFormatada}<br>
+        <b>Atualização:</b> ${horaAtual}<br>
         <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
       `;
 
-      if(marcadoresBuses.has(id)){
-        const mObj = marcadoresBuses.get(id);
-        // Atualiza posição e heading
-        mObj.marker.setLatLng([lat, lon]);
-        mObj.marker.setRotationAngle(bearing || 0);
-        if(mObj.marker._popup) mObj.marker._popup.setContent(popupHTML);
-      } else {
-        const marker = L.marker([lat, lon], {
-          icon: createBusSVGIcon(line_id),
-          rotationAngle: bearing || 0,
-          rotationOrigin: 'center'
-        }).addTo(map);
-        marker.bindPopup(popupHTML);
-        marcadoresBuses.set(id, {marker});
-      }
+      const marker = L.marker([lat, lon], {
+        icon: createBusSVGIcon(line_id),
+        rotationAngle: bearing || 0,
+        rotationOrigin: 'center'
+      }).addTo(map);
+
+      marker.bindPopup(popupHTML);
+      marcadoresBuses.push(marker);
     });
+
   }catch(err){ console.error('Erro ao carregar veículos:', err); }
 }
 
 // Inicializa e atualiza a cada 30s
 carregarAutocarros();
-setInterval(carregarAutocarros, 30000);
+setInterval(carregarAutocarros,30000);
 </script>
 </body>
 </html>
