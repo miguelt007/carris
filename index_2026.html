@@ -126,17 +126,23 @@ function lerPopup(v){
 // ---------------- MARKERS ----------------
 const markers = new Map();
 
-// animação suave entre coordenadas
-function moveMarker(marker, newLatLng, duration = 28000){
+// interpolação suave de posição e bearing
+function moveMarker(marker, newLatLng, newBearing, duration = 28000){
   if(!marker._latlng) return;
   const start = marker.getLatLng();
+  const startBearing = marker.options.rotationAngle || 0;
+  const deltaLat = newLatLng[0] - start.lat;
+  const deltaLng = newLatLng[1] - start.lng;
+
+  // diferença mínima do ângulo
+  let deltaBearing = ((newBearing - startBearing + 540) % 360) - 180;
+
   const startTime = performance.now();
 
   function animate(time){
     const t = Math.min((time - startTime)/duration,1);
-    const lat = start.lat + (newLatLng[0]-start.lat)*t;
-    const lng = start.lng + (newLatLng[1]-start.lng)*t;
-    marker.setLatLng([lat,lng]);
+    marker.setLatLng([start.lat + deltaLat*t, start.lng + deltaLng*t]);
+    marker.setRotationAngle(startBearing + deltaBearing*t);
     if(t<1) requestAnimationFrame(animate);
   }
 
@@ -164,9 +170,7 @@ async function updateVehicles(){
         markers.set(v.id, marker);
       } else {
         const m = markers.get(v.id);
-        // movimento suave
-        moveMarker(m,[v.lat,v.lon]);
-        m.setRotationAngle(v.bearing || 0);
+        moveMarker(m, [v.lat,v.lon], v.bearing || 0);
         m.getPopup().setContent(popupContent);
       }
     });
@@ -179,6 +183,7 @@ async function updateVehicles(){
 // ---------------- START ----------------
 updateVehicles();
 setInterval(updateVehicles,30000);
+
 </script>
 </body>
 </html>
