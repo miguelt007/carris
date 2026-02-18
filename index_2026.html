@@ -58,10 +58,7 @@ html, body {
 <script>
 // ---------------- MAP ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 12);
-L.tileLayer(
-  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { attribution:"© OpenStreetMap contributors" }
-).addTo(map);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:"© OpenStreetMap contributors" }).addTo(map);
 
 // ---------------- ICON ----------------
 function createBusIcon(line){
@@ -94,9 +91,7 @@ function traduzirStatus(status){
   }
 }
 
-// ---------------- VEHICLES ----------------
-const markers = new Map();
-
+// ---------------- POPUP ----------------
 function lerPopup(v){
   return `
     <b>ID:</b> ${v.id}<br>
@@ -110,8 +105,7 @@ function lerPopup(v){
     <b>Portas:</b> ${v.door_status}<br>
     <b>Agência:</b> ${v.agency_id}<br>
     <b>Veículo:</b> ${v.make} ${v.model} (${v.license_plate})<br>
-    <b>Capacidade:</b> ${v.capacity_total} total 
-      (${v.capacity_seated} sentados, ${v.capacity_standing} em pé)<br>
+    <b>Capacidade:</b> ${v.capacity_total} total (${v.capacity_seated} sentados, ${v.capacity_standing} em pé)<br>
     <b>Permite bicicletas:</b> ${v.bikes_allowed ? "Sim" : "Não"}<br>
     <b>Contactless:</b> ${v.contactless ? "Sim" : "Não"}<br>
     <b>Acessível cadeira de rodas:</b> ${v.wheelchair_accessible ? "Sim" : "Não"}<br>
@@ -129,6 +123,26 @@ function lerPopup(v){
   `;
 }
 
+// ---------------- MARKERS ----------------
+const markers = new Map();
+
+// animação suave entre coordenadas
+function moveMarker(marker, newLatLng, duration = 28000){
+  if(!marker._latlng) return;
+  const start = marker.getLatLng();
+  const startTime = performance.now();
+
+  function animate(time){
+    const t = Math.min((time - startTime)/duration,1);
+    const lat = start.lat + (newLatLng[0]-start.lat)*t;
+    const lng = start.lng + (newLatLng[1]-start.lng)*t;
+    marker.setLatLng([lat,lng]);
+    if(t<1) requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+}
+
 // ---------------- UPDATE ----------------
 async function updateVehicles(){
   try{
@@ -138,20 +152,22 @@ async function updateVehicles(){
     vehicles.forEach(v=>{
       if(v.lat == null || v.lon == null) return;
 
+      const popupContent = lerPopup(v);
+
       if(!markers.has(v.id)){
-        const marker = L.marker([v.lat, v.lon],{
+        const marker = L.marker([v.lat,v.lon],{
           icon: createBusIcon(v.line_id),
           rotationAngle: v.bearing || 0,
           rotationOrigin: "center center"
         }).addTo(map);
-        marker.bindPopup(lerPopup(v));
+        marker.bindPopup(popupContent);
         markers.set(v.id, marker);
       } else {
         const m = markers.get(v.id);
         // movimento suave
-        m.setLatLng([v.lat,v.lon]);
+        moveMarker(m,[v.lat,v.lon]);
         m.setRotationAngle(v.bearing || 0);
-        m.getPopup().setContent(lerPopup(v));
+        m.getPopup().setContent(popupContent);
       }
     });
 
@@ -163,7 +179,6 @@ async function updateVehicles(){
 // ---------------- START ----------------
 updateVehicles();
 setInterval(updateVehicles,30000);
-
 </script>
 </body>
 </html>
