@@ -6,7 +6,6 @@
 <title>Carris Metropolitana – Live com Rota Real</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; overflow:hidden; }
 #map { height:100%; }
@@ -36,16 +35,33 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; overflow:hid
   0%,100%{opacity:1;}
   50%{opacity:0.3;}
 }
+#botao-centro {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: white;
+  border: 2px solid #333;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+  text-align: center;
+  line-height: 44px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
 </style>
 </head>
 <body>
 
 <div id="header">
   <div class="live-dot"></div>
-  Carris Metropolitana – Live (Rota Real)
+  Carris Metropolitana – Live
 </div>
 
 <div id="map"></div>
+<button id="botao-centro">&#9673;</button>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
@@ -86,7 +102,6 @@ function traduzirStatus(status){
   }
 }
 
-// ---------------- POPUP ----------------
 function lerPopup(v){
   return `
     <b>ID:</b> ${v.id}<br>
@@ -126,7 +141,6 @@ const patternsCache = new Map();
 function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
   if(!marker._latlng || !path || path.length<2) return;
 
-  // Encontra segmento mais próximo da posição atual
   let closestIndex = 0;
   let minDist = Infinity;
   const lat = vehicle.lat, lon = vehicle.lon;
@@ -136,14 +150,12 @@ function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
     if(d<minDist){ minDist=d; closestIndex=i; }
   }
 
-  // Segmento inicial e final
   const start = path[closestIndex];
   const end = path[closestIndex+1] || path[closestIndex];
 
   const deltaLat = end.lat - start.lat;
   const deltaLng = end.lon - start.lon;
 
-  // Bearing real do segmento
   const rad = Math.atan2(deltaLng, deltaLat);
   const segmentBearing = rad*180/Math.PI;
 
@@ -156,7 +168,6 @@ function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
     const newLat = startPos.lat + deltaLat*t;
     const newLon = startPos.lng + deltaLng*t;
 
-    // Diferença mínima de ângulo
     let deltaBearing = ((segmentBearing - startBearing + 540)%360)-180;
     marker.setLatLng([newLat,newLon]);
     marker.setRotationAngle(startBearing + deltaBearing*t);
@@ -178,14 +189,13 @@ async function updateVehicles(){
 
       const popupContent = lerPopup(v);
 
-      // Carregar path do pattern se não estiver em cache
       if(!patternsCache.has(v.pattern_id)){
         try{
           const patternData = await fetch(`https://api.carrismetropolitana.pt/v2/patterns/${v.pattern_id}`)
             .then(r=>r.json());
           patternsCache.set(v.pattern_id, patternData.path || []);
         }catch(e){
-          console.warn("Erro ao obter pattern",v.pattern_id,e);
+          console.warn("Erro pattern",v.pattern_id,e);
           patternsCache.set(v.pattern_id,[]);
         }
       }
@@ -204,14 +214,32 @@ async function updateVehicles(){
         const marker = markers.get(v.id);
         marker.getPopup().setContent(popupContent);
         if(path.length>1) moveMarkerAlongPath(marker, path, v);
-        else marker.setLatLng([v.lat,v.lon]); // fallback
+        else marker.setLatLng([v.lat,v.lon]);
       }
     }
-
   } catch(e){
     console.error("Erro API:", e);
   }
 }
+
+// ---------------- USER LOCATION ----------------
+let userMarker;
+navigator.geolocation.watchPosition(pos=>{
+  const {latitude, longitude} = pos.coords;
+  if(!userMarker){
+    userMarker = L.marker([latitude,longitude],{
+      icon:L.icon({
+        iconUrl:"https://miguelt007.github.io/carris/ponto_preto.png",
+        iconSize:[16,16],
+        iconAnchor:[8,8]
+      })
+    }).addTo(map);
+  } else userMarker.setLatLng([latitude,longitude]);
+});
+
+document.getElementById("botao-centro").addEventListener("click", ()=>{
+  if(userMarker) map.setView(userMarker.getLatLng(),15);
+});
 
 // ---------------- START ----------------
 updateVehicles();
