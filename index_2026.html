@@ -52,13 +52,12 @@ navigator.geolocation.watchPosition(pos=>{
 });
 document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
 
-// Função de ícone retangular com seta
+// Ícone retangular com seta
 function createBusSVGIcon(line){
   const rectWidth = 40;
   const height = 20;
   const padding = 4;
   const arrowWidth = 10;
-
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth+arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth+arrowWidth} ${height}">
     <rect x="0" y="0" width="${rectWidth}" height="${height}" fill="#FFD100" stroke="black" rx="3" ry="3"/>
@@ -100,18 +99,42 @@ async function obterInfoPercurso(pattern_id){
   }catch{return {headsign:"não disponível",paragens:[]};}
 }
 
-// Função principal de carregar autocarros
-let marcadoresBuses = [];
+// Marcadores existentes
+const marcadoresBuses = new Map();
+
+// Interpolação linear
+function lerp(a,b,t){ return a + (b-a)*t; }
+function interpolateLatLng(latlng1, latlng2, t){
+  return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)];
+}
+
+// Animação do marcador
+function animateMarker(mObj, newPos, newAngle, duration=30000){
+  const startTime = performance.now();
+  const startPos = mObj.currentPos || newPos.slice();
+  const startAngle = mObj.currentAngle != null ? mObj.currentAngle : newAngle;
+
+  function frame(time){
+    const t = Math.min((time-startTime)/duration,1);
+    const pos = interpolateLatLng(startPos,newPos,t);
+    const angle = lerp(startAngle,newAngle,t);
+    mObj.marker.setLatLng(pos);
+    mObj.marker.setRotationAngle(angle);
+    mObj.currentPos = pos;
+    mObj.currentAngle = angle;
+    if(t<1) mObj.animFrame = requestAnimationFrame(frame);
+    else mObj.animFrame = null;
+  }
+  if(mObj.animFrame) cancelAnimationFrame(mObj.animFrame);
+  mObj.animFrame = requestAnimationFrame(frame);
+}
+
+// Carregar autocarros com animação suave
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
     if(!veiculos || !Array.isArray(veiculos)) return;
 
-    // Remove todos os marcadores antigos
-    marcadoresBuses.forEach(m => map.removeLayer(m));
-    marcadoresBuses = [];
-
-    // Adiciona novos marcadores
     veiculos.forEach(async v=>{
       if(!v.lat || !v.lon) return;
       const {lat, lon, id, line_id, bearing, current_status, pattern_id} = v;
@@ -128,14 +151,19 @@ async function carregarAutocarros(){
         <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
       `;
 
-      const marker = L.marker([lat, lon], {
-        icon: createBusSVGIcon(line_id),
-        rotationAngle: bearing || 0,
-        rotationOrigin: 'center'
-      }).addTo(map);
-
-      marker.bindPopup(popupHTML);
-      marcadoresBuses.push(marker);
+      if(marcadoresBuses.has(id)){
+        const mObj = marcadoresBuses.get(id);
+        mObj.marker._popup.setContent(popupHTML);
+        animateMarker(mObj, [lat, lon], bearing||0, 30000);
+      } else {
+        const marker = L.marker([lat, lon], {
+          icon: createBusSVGIcon(line_id),
+          rotationAngle: bearing||0,
+          rotationOrigin:'center'
+        }).addTo(map);
+        marker.bindPopup(popupHTML);
+        marcadoresBuses.set(id,{marker, currentPos:[lat,lon], currentAngle:bearing||0, animFrame:null});
+      }
     });
 
   }catch(err){ console.error('Erro ao carregar veículos:', err); }
