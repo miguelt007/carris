@@ -88,6 +88,7 @@ function traduzirStatus(status){
 
 // Armazenar marcadores
 const marcadoresBuses = new Map();
+const cachePatterns = new Map();
 
 // Interpolação linear
 function lerp(a,b,t){ return a + (b-a)*t; }
@@ -114,24 +115,49 @@ function animateMarker(mObj, newPos, newAngle, duration=30000){
   mObj.animFrame = requestAnimationFrame(frame);
 }
 
+// Obter informações do percurso via pattern_id
+async function obterInfoPercurso(pattern_id){
+  if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
+
+  try{
+    const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
+    if(!resposta.ok) throw new Error("Erro ao obter percurso");
+    const dados = await resposta.json();
+    const headsign = dados?.headsign || "não disponível";
+    const path = dados?.path || [];
+    const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
+    const info = { headsign, paragens };
+    cachePatterns.set(pattern_id, info);
+    return info;
+  }catch(err){
+    console.warn("Percurso não disponível:",err);
+    const info = { headsign:"não disponível", paragens:[] };
+    cachePatterns.set(pattern_id, info);
+    return info;
+  }
+}
+
 // Carregar dados reais da API
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles")
       .then(res=>res.json());
 
-    veiculos.forEach(v=>{
-      const {id,line_id,lat,lon,bearing,current_status,timestamp} = v;
+    veiculos.forEach(async v=>{
+      const {id,line_id,lat,lon,bearing,current_status,timestamp,pattern_id} = v;
       if(!lat || !lon) return;
 
       const estado = traduzirStatus(current_status);
       const horaAtual = new Date(timestamp*1000).toLocaleTimeString("pt-PT",{hour12:false});
+      const {headsign, paragens} = await obterInfoPercurso(pattern_id);
 
       const popupHTML = `
         🚌 <strong>Autocarro ${id}</strong><br>
         <b>Linha:</b> ${line_id}<br>
+        <b>Destino:</b> ${headsign}<br>
         <b>Estado:</b> ${estado}<br>
         <b>Atualização:</b> ${horaAtual}<br>
+        <b>Próximas paragens:</b><br>${paragens.join("<br>")}
       `;
 
       if(!marcadoresBuses.has(id)){
