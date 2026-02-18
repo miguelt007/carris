@@ -90,13 +90,12 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Função de ícone SVG com texto à esquerda e seta visível
+// Função de ícone SVG otimizado (texto à esquerda, retângulo fixo)
 function createBusSVGIcon(line){
-  const textLength = line.length * 8; // tamanho do texto
-  const rectWidth = Math.max(30 + textLength, 50); // retângulo maior
+  const rectWidth = 40; // retângulo fixo
   const height = 20;
-  const padding = 4; // texto à esquerda
-  const arrowWidth = 10; // espaço para a seta
+  const padding = 4;
+  const arrowWidth = 10;
 
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth + arrowWidth}" height="${height}" viewBox="0 0 ${rectWidth + arrowWidth} ${height}">
@@ -111,7 +110,13 @@ function createBusSVGIcon(line){
   });
 }
 
-// Carregar autocarros
+// Interpolação linear para animação suave
+function lerp(a,b,t){ return a + (b-a)*t; }
+function interpolateLatLng(latlng1, latlng2, t){
+  return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)];
+}
+
+// Carregar autocarros com animação
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
@@ -137,8 +142,24 @@ async function carregarAutocarros(){
 
       if(marcadoresBuses.has(id)){
         const m = marcadoresBuses.get(id);
-        m.setLatLng([lat,lon]);
-        m.setRotationAngle(bearing||0);
+        const startPos = m.getLatLng();
+        const startAngle = m.options.rotationAngle || 0;
+        const endPos = [lat,lon];
+        const endAngle = bearing || 0;
+        const duration = 30000; // 30s
+        const steps = 30; // frames
+        let step = 0;
+
+        const anim = setInterval(()=>{
+          step++;
+          const t = step/steps;
+          const newPos = interpolateLatLng([startPos.lat, startPos.lng], endPos, t);
+          m.setLatLng(newPos);
+          const angle = lerp(startAngle,endAngle,t);
+          m.setRotationAngle(angle);
+          if(step>=steps) clearInterval(anim);
+        }, duration/steps);
+
         if(m._popup) m._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
