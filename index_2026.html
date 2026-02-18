@@ -105,7 +105,7 @@ function createBusIcon(line){
     iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
     iconSize:[totalW,height],
 
-    // 🔥 rotação correta na ponta da seta
+    // 🔥 rotação na ponta da seta
     iconAnchor:[totalW, height/2]
   });
 }
@@ -148,13 +148,17 @@ async function fetchPattern(pattern_id){
 
     const data = await res.json();
 
-    // 🔥 Estrutura correta v2
-    const paragens = (data.path || [])
-      .map(p => p.stop)
+    // ✅ ESTRUTURA CORRETA
+    const paragens = (data.stops || [])
+      .map(s => s.stop)
       .filter(Boolean);
 
+    const headsign =
+      data.headsign ||
+      (paragens.length ? paragens[paragens.length-1].name : "");
+
     const info = {
-      headsign: data.headsign || "",
+      headsign,
       paragens
     };
 
