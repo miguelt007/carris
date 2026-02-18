@@ -2,11 +2,47 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Autocarros Carris em Tempo Real</title>
+  <title>Carris Metropolitana - Live</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { width: 100%; height: 100%; }
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    body { display: flex; flex-direction: column; }
+
+    /* Cabeçalho */
+    #header {
+      height: 50px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    #header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .live-indicator {
+      width: 12px;
+      height: 12px;
+      background: #27ae60; /* verde */
+      border-radius: 50%;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0.2; }
+    }
+
+    /* Mapa */
+    #map { flex: 1; }
 
     /* Ícones de autocarro */
     .bus-container {
@@ -51,11 +87,17 @@
 </head>
 <body>
 
+<div id="header">
+  <h1>
+    Carris Metropolitana – Live
+    <div class="live-indicator"></div>
+  </h1>
+</div>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-  // Inicializa mapa
   const map = L.map('map').setView([38.72, -9.14], 13);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -64,7 +106,6 @@
 
   let markers = [];
 
-  // Função para criar ícone
   function createBusIcon(route, bearing) {
     return L.divIcon({
       className: "bus-wrapper",
@@ -81,7 +122,6 @@
     });
   }
 
-  // Função para buscar dados da API
   async function fetchBuses() {
     try {
       const res = await fetch("https://api.carrismetropolitana.pt/vehicles");
@@ -93,7 +133,6 @@
     }
   }
 
-  // Atualiza os marcadores no mapa
   async function updateBuses() {
     const buses = await fetchBuses();
 
@@ -109,7 +148,6 @@
           { icon: createBusIcon(bus.route_short_name, bus.bearing || 0) }
         ).addTo(map);
 
-        // Popup com info
         marker.bindPopup(`
           <b>Rota:</b> ${bus.route_short_name}<br>
           <b>Destino:</b> ${bus.destination || "N/A"}<br>
@@ -121,9 +159,7 @@
     });
   }
 
-  // Inicial
   updateBuses();
-  // Atualiza a cada 10s
   setInterval(updateBuses, 10000);
 </script>
 
