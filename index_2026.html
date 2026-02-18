@@ -3,40 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Teste Mapa</title>
+<title>Carris Metropolitana – Live</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-html, body { margin:0; height:100%; }
+html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 #map { height:100%; width:100%; }
-.bus-container {
-  display:flex; align-items:center;
+
+#header {
+  position:absolute; top:10px; left:50%; transform:translateX(-50%);
+  z-index:1000; background: rgba(0,0,0,0.5); padding:10px 20px; border-radius:10px;
+  display:flex; align-items:center; gap:10px; color:white; font-weight:bold; font-size:18px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.3);
 }
+.live-indicator { width:12px; height:12px; background:#27ae60; border-radius:50%; animation:blink 1s infinite; }
+@keyframes blink { 0%,50%,100%{opacity:1;} 25%,75%{opacity:0.2;} }
+
+.bus-container { display:flex; align-items:center; justify-content:flex-start; height:30px; transform-origin:center; }
 .bus-rect {
-  background:#FFD100; color:black; font-weight:bold; padding:0 6px; border-radius:4px;
-  display:flex; align-items:center; justify-content:center;
-  height:30px; white-space:nowrap;
+  background:#FFD100; color:black; font-weight:bold; font-size:14px;
+  padding:0 6px; border-radius:4px; display:flex; align-items:center; justify-content:center;
+  white-space:nowrap; height:100%;
 }
 .bus-arrow {
   width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
   border-bottom:10px solid black; margin-left:4px;
 }
+
+#botao-centro {
+  position:absolute; bottom:20px; right:20px; z-index:999;
+  background:white; border:2px solid #333; border-radius:50%; width:48px; height:48px;
+  font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
+}
+
+.leaflet-popup-content { max-height:250px; overflow-y:auto; }
 </style>
 </head>
 <body>
 
+<div id="header">
+  <span class="live-indicator"></span> Carris Metropolitana – Live
+</div>
 <div id="map"></div>
+<button id="botao-centro">&#9673;</button>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 <script>
-// Inicializar mapa
 const map = L.map('map').setView([38.736946, -9.142685], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap contributors'
 }).addTo(map);
 
-// Função para criar ícone retangular giratório
-function createBusIcon(line, bearing){
+// Utilizador
+let marcadorUtilizador;
+navigator.geolocation.watchPosition(pos=>{
+  const {latitude,longitude} = pos.coords;
+  if(!marcadorUtilizador) marcadorUtilizador = L.marker([latitude,longitude]).addTo(map);
+  else marcadorUtilizador.setLatLng([latitude,longitude]);
+});
+document.getElementById('botao-centro').addEventListener('click',()=>{ if(marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(),15); });
+
+// Funções utilitárias
+function traduzirStatus(status){
+  switch(status){
+    case "INCOMING_AT": return "A chegar à paragem";
+    case "STOPPED_AT": return "Parado na paragem";
+    case "IN_TRANSIT_TO": return "Em trânsito";
+    default: return "Desconhecido";
+  }
+}
+
+function calcularDistanciaKm(lat1, lon1, lat2, lon2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+
+// Cache de percursos
+const cachePatterns = new Map();
+async function obterInfoPercurso(pattern_id){
+  if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
+  try{
+    const res = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
+    if(!res.ok) throw new Error();
+    const dados = await res.json();
+    const headsign = dados?.headsign||"não disponível";
+    const path = dados?.path||[];
+    const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
+    const proximaParagem = path.find(p=>p.stop?.lat && p.stop?.lon)?.stop||null;
+    const info={headsign,paragens,proximaParagem};
+    cachePatterns.set(pattern_id,info);
+    return info;
+  }catch{return {headsign:"não disponível",paragens:[],proximaParagem:null};}
+}
+
+// Marcadores existentes
+const marcadoresBuses = new Map();
+
+// Ícone retangular giratório
+function createBusIcon(line,bearing){
   return L.divIcon({
     className:'bus-wrapper',
     html:`<div class="bus-container" style="transform: rotate(${bearing||0}deg)">
@@ -44,22 +110,70 @@ function createBusIcon(line, bearing){
       <div class="bus-arrow"></div>
     </div>`,
     iconSize:[50,30],
-    iconAnchor:[10,15]
+    iconAnchor:[5,15]
   });
 }
 
-// Marcadores de teste
-const testeBuses = [
-  {lat:38.737, lon:-9.142, line:"4701", bearing:45},
-  {lat:38.741, lon:-9.148, line:"7201", bearing:120},
-  {lat:38.730, lon:-9.135, line:"1", bearing:270},
-];
+// Carregar autocarros
+async function carregarAutocarros(){
+  try{
+    const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
 
-testeBuses.forEach(bus=>{
-  L.marker([bus.lat,bus.lon],{icon:createBusIcon(bus.line,bus.bearing)}).addTo(map)
-    .bindPopup(`Autocarro ${bus.line}, Bearing: ${bus.bearing}°`);
-});
+    veiculos.forEach(async v=>{
+      const {lat,lon,id,line_id,speed,bearing,current_status,pattern_id,timestamp} = v;
+      if(!lat||!lon) return;
+
+      const velocidadeKmH = speed?Math.round(speed*3.6):0;
+      const direcao = typeof bearing==="number"?Math.round(bearing)+'°':'não disponível';
+      const estado = traduzirStatus(current_status);
+      const hora = new Date(timestamp*1000).toLocaleTimeString("pt-PT");
+
+      const {headsign,paragens,proximaParagem} = await obterInfoPercurso(pattern_id);
+
+      let tempoEstimado = "não disponível";
+      if(proximaParagem && velocidadeKmH>0){
+        const distKm = calcularDistanciaKm(lat,lon,proximaParagem.lat,proximaParagem.lon);
+        const minutos = Math.round((distKm/velocidadeKmH)*60);
+        tempoEstimado = `${minutos} min`;
+      }
+
+      if(marcadoresBuses.has(id)){
+        const m = marcadoresBuses.get(id);
+        m.setRotationAngle(bearing||0);
+        m.setLatLng([lat,lon]);
+        m._popup.setContent(`
+          🚌 <strong>Autocarro ${id}</strong><br>
+          <b>Linha:</b> ${line_id}<br>
+          <b>Destino:</b> ${headsign}<br>
+          <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
+          <b>Direção:</b> ${direcao}<br>
+          <b>Estado:</b> ${estado}<br>
+          <b>Atualização:</b> ${hora}<br>
+          <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
+          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
+        `);
+      } else {
+        const marcador = L.marker([lat,lon],{icon:createBusIcon(line_id,bearing||0)}).addTo(map);
+        marcador.bindPopup(`
+          🚌 <strong>Autocarro ${id}</strong><br>
+          <b>Linha:</b> ${line_id}<br>
+          <b>Destino:</b> ${headsign}<br>
+          <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
+          <b>Direção:</b> ${direcao}<br>
+          <b>Estado:</b> ${estado}<br>
+          <b>Atualização:</b> ${hora}<br>
+          <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
+          <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
+        `);
+        marcadoresBuses.set(id,marcador);
+      }
+    });
+  }catch(console.error);
+}
+
+// Inicializa
+carregarAutocarros();
+setInterval(carregarAutocarros,30000);
 </script>
-
 </body>
 </html>
