@@ -9,9 +9,6 @@
     html, body {
       margin: 0;
       height: 100%;
-      max-width: 100vw;
-      overflow: hidden;
-      touch-action: manipulation;
       font-family: Arial, sans-serif;
     }
 
@@ -50,41 +47,35 @@
 
     .bus-container {
       position: relative;
-      width: 50px;
-      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      height: 30px;
       transform-origin: center;
     }
 
-    .bus-diamond {
-      width: 40px;
-      height: 40px;
+    .bus-rect {
       background: #FFD100; /* amarelo */
-      transform: rotate(45deg);
-      position: absolute;
-      top: 5px;
-      left: 5px;
+      color: black;
+      font-weight: bold;
+      font-size: 14px;
+      padding: 0 6px;
+      border-radius: 4px;
+      text-align: center;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    .bus-diamond span {
-      transform: rotate(-45deg);
-      color: black; /* número da linha */
-      font-weight: bold;
-      font-size: 14px;
+      white-space: nowrap;
+      height: 100%;
     }
 
     .bus-arrow {
-      position: absolute;
-      top: -4px;
-      left: 50%;
-      transform: translateX(-50%);
       width: 0;
       height: 0;
       border-left: 6px solid transparent;
       border-right: 6px solid transparent;
-      border-bottom: 10px solid black; /* seta direção */
+      border-bottom: 10px solid black;
+      margin-left: 4px;
     }
 
     #botao-centro {
@@ -103,150 +94,153 @@
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
+
+    .leaflet-popup-content { max-height: 250px; overflow-y: auto; }
   </style>
 </head>
 <body>
-  <div id="header">
-    <span class="live-indicator"></span>
-    Carris Metropolitana – Live
-  </div>
-  <div id="map"></div>
-  <button id="botao-centro">&#9673;</button>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
-  <script>
-    const map = L.map("map").setView([38.736946, -9.142685], 11);
+<div id="header">
+  <span class="live-indicator"></span>
+  Carris Metropolitana – Live
+</div>
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map);
+<div id="map"></div>
+<button id="botao-centro">&#9673;</button>
 
-    let marcadorUtilizador;
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
+<script>
+  const map = L.map("map").setView([38.736946, -9.142685], 11);
 
-    navigator.geolocation.watchPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      if (!marcadorUtilizador) {
-        marcadorUtilizador = L.marker([latitude, longitude]).addTo(map);
-      } else {
-        marcadorUtilizador.setLatLng([latitude, longitude]);
-      }
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors"
+  }).addTo(map);
+
+  let marcadorUtilizador;
+
+  navigator.geolocation.watchPosition((pos) => {
+    const { latitude, longitude } = pos.coords;
+    if (!marcadorUtilizador) {
+      marcadorUtilizador = L.marker([latitude, longitude]).addTo(map);
+    } else {
+      marcadorUtilizador.setLatLng([latitude, longitude]);
+    }
+  });
+
+  document.getElementById("botao-centro").addEventListener("click", () => {
+    if (marcadorUtilizador) map.setView(marcadorUtilizador.getLatLng(), 15);
+  });
+
+  function traduzirStatus(status) {
+    switch (status) {
+      case "INCOMING_AT": return "A chegar à paragem";
+      case "STOPPED_AT": return "Parado na paragem";
+      case "IN_TRANSIT_TO": return "Em trânsito";
+      default: return "Desconhecido";
+    }
+  }
+
+  function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  const cachePatterns = new Map();
+
+  async function obterInfoPercurso(pattern_id) {
+    if (cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
+    try {
+      const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
+      if (!resposta.ok) throw new Error("Erro ao obter percurso");
+      const dados = await resposta.json();
+      const headsign = dados?.headsign || "não disponível";
+      const path = dados?.path || [];
+      const paragens = path.map(p => p.stop?.name).filter(Boolean).slice(0, 5);
+      const proximaParagem = path.find(p => p.stop?.lat && p.stop?.lon)?.stop || null;
+      const info = { headsign, paragens, proximaParagem };
+      cachePatterns.set(pattern_id, info);
+      return info;
+    } catch {
+      const info = { headsign: "não disponível", paragens: [], proximaParagem: null };
+      cachePatterns.set(pattern_id, info);
+      return info;
+    }
+  }
+
+  function createBusIcon(line, bearing) {
+    return L.divIcon({
+      className: "bus-wrapper",
+      html: `
+        <div class="bus-container" style="transform: rotate(${bearing || 0}deg)">
+          <div class="bus-rect">${line}</div>
+          <div class="bus-arrow"></div>
+        </div>
+      `,
+      iconSize: [50,30],
+      iconAnchor: [25,15]
     });
+  }
 
-    document.getElementById("botao-centro").addEventListener("click", () => {
-      if (marcadorUtilizador) {
-        map.setView(marcadorUtilizador.getLatLng(), 15);
-      }
-    });
+  async function carregarAutocarros() {
+    try {
+      const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles")
+        .then(res => res.json());
 
-    function traduzirStatus(status) {
-      switch (status) {
-        case "INCOMING_AT": return "A chegar à paragem";
-        case "STOPPED_AT": return "Parado na paragem";
-        case "IN_TRANSIT_TO": return "Em trânsito";
-        default: return "Desconhecido";
-      }
-    }
-
-    function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    const cachePatterns = new Map();
-
-    async function obterInfoPercurso(pattern_id) {
-      if (cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
-      try {
-        const resposta = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
-        if (!resposta.ok) throw new Error("Erro ao obter percurso");
-        const dados = await resposta.json();
-        const headsign = dados?.headsign || "não disponível";
-        const path = dados?.path || [];
-        const paragens = path.map(p => p.stop?.name).filter(Boolean).slice(0, 5);
-        const proximaParagem = path.find(p => p.stop?.lat && p.stop?.lon)?.stop || null;
-        const info = { headsign, paragens, proximaParagem };
-        cachePatterns.set(pattern_id, info);
-        return info;
-      } catch (error) {
-        const info = { headsign: "não disponível", paragens: [], proximaParagem: null };
-        cachePatterns.set(pattern_id, info);
-        return info;
-      }
-    }
-
-    function createBusIcon(line, bearing) {
-      return L.divIcon({
-        className: "bus-wrapper",
-        html: `
-          <div class="bus-container" style="transform: rotate(${bearing || 0}deg)">
-            <div class="bus-diamond"><span>${line}</span></div>
-            <div class="bus-arrow"></div>
-          </div>
-        `,
-        iconSize: [50,50],
-        iconAnchor: [25,25]
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker && layer !== marcadorUtilizador) map.removeLayer(layer);
       });
+
+      veiculos.forEach(async veiculo => {
+        const { lat, lon, id, line_id, speed, bearing, current_status, pattern_id, timestamp } = veiculo;
+        if (!lat || !lon) return;
+
+        const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
+        const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
+        const estado = traduzirStatus(current_status);
+        const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
+
+        const { headsign, paragens, proximaParagem } = await obterInfoPercurso(pattern_id);
+
+        let tempoEstimado = "não disponível";
+        if (proximaParagem && velocidadeKmH > 0) {
+          const distKm = calcularDistanciaKm(lat, lon, proximaParagem.lat, proximaParagem.lon);
+          const minutos = Math.round((distKm / velocidadeKmH) * 60);
+          tempoEstimado = `${minutos} min`;
+        }
+
+        const marcador = L.marker([lat, lon], {
+          icon: createBusIcon(line_id, bearing || 0)
+        }).addTo(map);
+
+        marcador.bindPopup(`
+          🚌 <strong>Autocarro ${id}</strong><br>
+          <b>Linha:</b> ${line_id}<br>
+          <b>Destino:</b> ${headsign}<br>
+          <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
+          <b>Direção:</b> ${direcao}<br>
+          <b>Estado:</b> ${estado}<br>
+          <b>Atualização:</b> ${hora}<br>
+          <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
+          <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
+        `);
+      });
+    } catch (error) {
+      console.error("Erro ao carregar autocarros:", error);
     }
+  }
 
-    async function carregarAutocarros() {
-      try {
-        const veiculos = await fetch("https://api.carrismetropolitana.pt/vehicles")
-          .then(res => res.json());
+  carregarAutocarros();
+  setInterval(carregarAutocarros, 30000);
+</script>
 
-        map.eachLayer(layer => {
-          if (layer instanceof L.Marker && layer !== marcadorUtilizador) map.removeLayer(layer);
-        });
-
-        veiculos.forEach(async veiculo => {
-          const { lat, lon, id, line_id, speed, bearing, current_status, pattern_id, timestamp } = veiculo;
-          if (!lat || !lon) return;
-
-          const velocidadeKmH = speed ? Math.round(speed * 3.6) : 0;
-          const direcao = typeof bearing === "number" ? Math.round(bearing) + "°" : "não disponível";
-          const estado = traduzirStatus(current_status);
-          const hora = new Date(timestamp * 1000).toLocaleTimeString("pt-PT");
-
-          const { headsign, paragens, proximaParagem } = await obterInfoPercurso(pattern_id);
-
-          let tempoEstimado = "não disponível";
-          if (proximaParagem && velocidadeKmH > 0) {
-            const distKm = calcularDistanciaKm(lat, lon, proximaParagem.lat, proximaParagem.lon);
-            const minutos = Math.round((distKm / velocidadeKmH) * 60);
-            tempoEstimado = `${minutos} min`;
-          }
-
-          const marcador = L.marker([lat, lon], {
-            icon: createBusIcon(line_id, bearing || 0)
-          }).addTo(map);
-
-          marcador.bindPopup(`
-            🚌 <strong>Autocarro ${id}</strong><br>
-            <b>Linha:</b> ${line_id}<br>
-            <b>Destino:</b> ${headsign}<br>
-            <b>Velocidade:</b> ${velocidadeKmH} km/h<br>
-            <b>Direção:</b> ${direcao}<br>
-            <b>Estado:</b> ${estado}<br>
-            <b>Atualização:</b> ${hora}<br>
-            <b>Tempo estimado até próxima paragem:</b> ${tempoEstimado}<br>
-            <br><strong>Próximas paragens:</strong><br>${paragens.join("<br>")}
-          `);
-        });
-      } catch (error) {
-        console.error("Erro ao carregar autocarros:", error);
-      }
-    }
-
-    carregarAutocarros();
-    setInterval(carregarAutocarros, 30000);
-  </script>
 </body>
 </html>
