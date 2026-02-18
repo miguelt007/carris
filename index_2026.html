@@ -8,7 +8,6 @@
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 #map { height:100%; width:100%; }
-
 #header {
   position:absolute; top:10px; left:50%; transform:translateX(-50%);
   z-index:1000; background: rgba(0,0,0,0.5); padding:10px 20px; border-radius:10px;
@@ -34,7 +33,6 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
   background:white; border:2px solid #333; border-radius:50%; width:48px; height:48px;
   font-size:24px; text-align:center; line-height:44px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
 }
-
 .leaflet-popup-content { max-height:250px; overflow-y:auto; }
 </style>
 </head>
@@ -49,6 +47,7 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker@master/leaflet.rotatedMarker.js"></script>
 <script>
+// Inicializar mapa imediatamente
 const map = L.map('map').setView([38.736946, -9.142685], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap contributors'
@@ -76,13 +75,13 @@ function traduzirStatus(status){
 function calcularDistanciaKm(lat1, lon1, lat2, lon2){
   const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-  return R*c;
+  return 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*R;
 }
 
 // Cache de percursos
 const cachePatterns = new Map();
 async function obterInfoPercurso(pattern_id){
+  if(!pattern_id) return {headsign:"não disponível",paragens:[],proximaParagem:null};
   if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
   try{
     const res = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
@@ -118,19 +117,20 @@ function createBusIcon(line,bearing){
 async function carregarAutocarros(){
   try{
     const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
+    if(!veiculos || !Array.isArray(veiculos)) return;
 
     veiculos.forEach(async v=>{
+      if(!v || !v.lat || !v.lon) return; // Ignorar veículos inválidos
       const {lat,lon,id,line_id,speed,bearing,current_status,pattern_id,timestamp} = v;
-      if(!lat||!lon) return;
 
       const velocidadeKmH = speed?Math.round(speed*3.6):0;
       const direcao = typeof bearing==="number"?Math.round(bearing)+'°':'não disponível';
       const estado = traduzirStatus(current_status);
-      const hora = new Date(timestamp*1000).toLocaleTimeString("pt-PT");
+      const hora = timestamp?new Date(timestamp*1000).toLocaleTimeString("pt-PT"):'não disponível';
 
       const {headsign,paragens,proximaParagem} = await obterInfoPercurso(pattern_id);
 
-      let tempoEstimado = "não disponível";
+      let tempoEstimado="não disponível";
       if(proximaParagem && velocidadeKmH>0){
         const distKm = calcularDistanciaKm(lat,lon,proximaParagem.lat,proximaParagem.lon);
         const minutos = Math.round((distKm/velocidadeKmH)*60);
@@ -141,7 +141,7 @@ async function carregarAutocarros(){
         const m = marcadoresBuses.get(id);
         m.setRotationAngle(bearing||0);
         m.setLatLng([lat,lon]);
-        m._popup.setContent(`
+        if(m._popup) m._popup.setContent(`
           🚌 <strong>Autocarro ${id}</strong><br>
           <b>Linha:</b> ${line_id}<br>
           <b>Destino:</b> ${headsign}<br>
@@ -168,12 +168,13 @@ async function carregarAutocarros(){
         marcadoresBuses.set(id,marcador);
       }
     });
-  }catch(console.error);
+  }catch(err){ console.error('Erro ao carregar veículos:',err); }
 }
 
 // Inicializa
 carregarAutocarros();
 setInterval(carregarAutocarros,30000);
+
 </script>
 </body>
 </html>
