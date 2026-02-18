@@ -25,10 +25,9 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 }
 .leaflet-popup-content { max-height:250px; overflow-y:auto; }
 
-/* Ícone do autocarro */
+/* Ícone do autocarro simples */
 .bus-icon {
   display:flex; align-items:center; justify-content:flex-start; height:30px;
-  transform-origin:center;
 }
 .bus-rect {
   background:#FFD100; color:black; font-weight:bold; font-size:14px;
@@ -105,7 +104,7 @@ async function obterInfoPercurso(pattern_id){
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
-// Criar ícone do autocarro
+// Criar ícone do autocarro simples
 function createBusIcon(line){
   return L.divIcon({
     className:'bus-wrapper',
