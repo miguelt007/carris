@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Live com Movimento Real</title>
+<title>Carris Metropolitana – Live</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
@@ -74,7 +74,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:
 // ---------------- ICON ----------------
 function createBusIcon(line){
   const h = 20;
-  const rectW = Math.min(50, 20 + (line ? line.length*6 : 10)); // largura limitada
+  const rectW = Math.min(40, 20 + (line ? line.length*6 : 10)); // largura limitada a 40px
   const arrowW = 10;
   const w = rectW + arrowW;
 
@@ -88,7 +88,7 @@ function createBusIcon(line){
   return L.icon({
     iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
     iconSize:[w,h],
-    iconAnchor:[w/2,h/2]
+    iconAnchor:[w/2,h/2] // centro do ícone para rotação
   });
 }
 
@@ -110,7 +110,7 @@ function lerPopup(v){
     <b>Trip:</b> ${v.trip_id}<br>
     <b>Estado:</b> ${traduzirStatus(v.current_status)}<br>
     <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
-    <b>Rumo:</b> ${v.bearing}°<br>
+    <b>Bearing:</b> ${v.bearing}°<br>
     <b>Stop ID:</b> ${v.stop_id}<br>
     <b>Portas:</b> ${v.door_status}<br>
     <b>Agência:</b> ${v.agency_id}<br>
@@ -136,16 +136,17 @@ function lerPopup(v){
 // ---------------- MARKERS ----------------
 const markers = new Map();
 
-// ---------------- MOVIMENTO SUAVE ----------------
-function animateMarkerTo(marker, newLat, newLon, newBearing, duration=30000){
+// ---------------- MOVIMENTO SUAVE COM BEARING DA API ----------------
+function animateMarkerTo(marker, newLat, newLon, bearing, duration=30000){
   if(!marker._latlng) return;
 
   const startLat = marker.getLatLng().lat;
   const startLon = marker.getLatLng().lng;
   const startBearing = marker.options.rotationAngle || 0;
+
   const deltaLat = newLat - startLat;
   const deltaLon = newLon - startLon;
-  let deltaBearing = ((newBearing - startBearing + 540)%360)-180;
+  let deltaBearing = ((bearing - startBearing + 540) % 360) - 180;
 
   const startTime = performance.now();
   function animate(time){
