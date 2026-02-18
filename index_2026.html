@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Live com Rota Real</title>
+<title>Carris Metropolitana – Live com Movimento Real</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
@@ -74,21 +74,21 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution:
 // ---------------- ICON ----------------
 function createBusIcon(line){
   const h = 20;
-  const rectW = 30 + (line ? line.length*6 : 10);
+  const rectW = Math.min(50, 20 + (line ? line.length*6 : 10)); // largura limitada
   const arrowW = 10;
   const w = rectW + arrowW;
 
   const svg = `
   <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <rect width="${rectW}" height="${h}" fill="#FFD100" stroke="black" rx="4"/>
-    <text x="6" y="${h/2+5}" font-size="12" font-weight="bold">${line || "?"}</text>
+    <text x="4" y="${h/2+5}" font-size="12" font-weight="bold">${line || "?"}</text>
     <polygon points="${rectW},${h/2-5} ${rectW},${h/2+5} ${w},${h/2}" fill="black"/>
   </svg>`;
 
   return L.icon({
     iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
     iconSize:[w,h],
-    iconAnchor:[w,h/2]
+    iconAnchor:[w/2,h/2]
   });
 }
 
@@ -135,42 +135,25 @@ function lerPopup(v){
 
 // ---------------- MARKERS ----------------
 const markers = new Map();
-const patternsCache = new Map();
 
-// ---------------- MOVE MARKER COM BEARING DINÂMICO ----------------
-function moveMarkerAlongPath(marker, path, vehicle, duration=28000){
-  if(!marker._latlng || !path || path.length<2) return;
+// ---------------- MOVIMENTO SUAVE ----------------
+function animateMarkerTo(marker, newLat, newLon, newBearing, duration=30000){
+  if(!marker._latlng) return;
 
-  let closestIndex = 0;
-  let minDist = Infinity;
-  const lat = vehicle.lat, lon = vehicle.lon;
-  for(let i=0;i<path.length-1;i++){
-    const d = Math.hypot(lat - path[i].lat, lon - path[i].lon);
-    if(d<minDist){ minDist=d; closestIndex=i; }
-  }
+  const startLat = marker.getLatLng().lat;
+  const startLon = marker.getLatLng().lng;
+  const startBearing = marker.options.rotationAngle || 0;
+  const deltaLat = newLat - startLat;
+  const deltaLon = newLon - startLon;
+  let deltaBearing = ((newBearing - startBearing + 540)%360)-180;
 
-  const start = path[closestIndex];
-  const end = path[closestIndex+1] || path[closestIndex];
-  const startPos = marker.getLatLng();
   const startTime = performance.now();
-
   function animate(time){
     const t = Math.min((time - startTime)/duration,1);
-    const newLat = startPos.lat + (end.lat - start.lat)*t;
-    const newLon = startPos.lng + (end.lon - start.lon)*t;
-
-    // CALCULAR BEARING DO SEGMENTO EM CADA FRAME
-    const deltaLat = end.lat - start.lat;
-    const deltaLng = end.lon - start.lon;
-    const rad = Math.atan2(deltaLng, deltaLat);
-    const segmentBearing = rad*180/Math.PI;
-
-    marker.setLatLng([newLat,newLon]);
-    marker.setRotationAngle(segmentBearing);
-
+    marker.setLatLng([startLat + deltaLat*t, startLon + deltaLon*t]);
+    marker.setRotationAngle(startBearing + deltaBearing*t);
     if(t<1) requestAnimationFrame(animate);
   }
-
   requestAnimationFrame(animate);
 }
 
@@ -184,19 +167,6 @@ async function updateVehicles(){
       if(v.lat == null || v.lon == null) continue;
       const popupContent = lerPopup(v);
 
-      if(!patternsCache.has(v.pattern_id)){
-        try{
-          const patternData = await fetch(`https://api.carrismetropolitana.pt/v2/patterns/${v.pattern_id}`)
-            .then(r=>r.json());
-          patternsCache.set(v.pattern_id, patternData.path || []);
-        }catch(e){
-          console.warn("Erro pattern",v.pattern_id,e);
-          patternsCache.set(v.pattern_id,[]);
-        }
-      }
-
-      const path = patternsCache.get(v.pattern_id);
-
       if(!markers.has(v.id)){
         const marker = L.marker([v.lat,v.lon],{
           icon:createBusIcon(v.line_id),
@@ -208,8 +178,7 @@ async function updateVehicles(){
       } else {
         const marker = markers.get(v.id);
         marker.getPopup().setContent(popupContent);
-        if(path.length>1) moveMarkerAlongPath(marker, path, v);
-        else marker.setLatLng([v.lat,v.lon]);
+        animateMarkerTo(marker, v.lat, v.lon, v.bearing||0, 30000);
       }
     }
   } catch(e){
