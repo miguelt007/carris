@@ -12,46 +12,27 @@ html,body{
   margin:0;
   height:100%;
   overflow:hidden;
-  font-family:Arial, sans-serif;
+  font-family:Arial;
 }
-#map{
-  height:100%;
-  width:100%;
-}
+#map{ height:100%; }
 #header{
   position:absolute;
   top:15px;
   left:50%;
   transform:translateX(-50%);
   z-index:1000;
-  background:rgba(0,0,0,0.75);
-  padding:12px 22px;
-  border-radius:12px;
+  background:rgba(0,0,0,0.8);
+  padding:12px 20px;
+  border-radius:10px;
   color:white;
-  font-size:18px;
   font-weight:bold;
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.live-dot{
-  width:12px;
-  height:12px;
-  background:#00ff2a;
-  border-radius:50%;
-  animation:blink 1s infinite;
-}
-@keyframes blink{
-  0%,100%{opacity:1;}
-  50%{opacity:0.3;}
 }
 </style>
 </head>
 <body>
 
 <div id="header">
-  <div class="live-dot"></div>
-  Carris Metropolitana – Live
+Carris Metropolitana – Live
 </div>
 
 <div id="map"></div>
@@ -61,218 +42,133 @@ html,body{
 
 <script>
 
-// ---------------- MAP ----------------
 const map = L.map('map').setView([38.736946, -9.142685], 12);
 
 L.tileLayer(
-  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { attribution:"© OpenStreetMap contributors" }
+"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+{ attribution:"© OpenStreetMap" }
 ).addTo(map);
 
 
-// ---------------- ICON ----------------
+// ---------- ICON ----------
 function createBusIcon(line){
 
-  const height = 20;
-  const rectW = 30 + (line.length * 6);
-  const arrowW = 10;
-  const totalW = rectW + arrowW;
+  const h=20;
+  const rectW=30+(line.length*6);
+  const arrowW=10;
+  const w=rectW+arrowW;
 
-  const svg = `
+  const svg=`
   <svg xmlns="http://www.w3.org/2000/svg"
-       width="${totalW}" height="${height}">
-    <rect x="0" y="0"
-          width="${rectW}"
-          height="${height}"
-          fill="#FFD100"
-          stroke="black"
-          rx="4" ry="4"/>
-    <text x="6"
-          y="${height/2+5}"
+       width="${w}" height="${h}">
+    <rect width="${rectW}" height="${h}"
+          fill="#FFD100" stroke="black"
+          rx="4"/>
+    <text x="6" y="${h/2+5}"
           font-size="12"
-          font-family="Arial"
-          font-weight="bold"
-          fill="black">
+          font-weight="bold">
       ${line}
     </text>
-    <polygon points="${rectW},${height/2-5}
-                     ${rectW},${height/2+5}
-                     ${totalW},${height/2}"
+    <polygon points="${rectW},${h/2-5}
+                     ${rectW},${h/2+5}
+                     ${w},${h/2}"
              fill="black"/>
   </svg>`;
 
   return L.icon({
     iconUrl:"data:image/svg+xml;base64,"+btoa(svg),
-    iconSize:[totalW,height],
-
-    // 🔥 rotação na ponta da seta
-    iconAnchor:[totalW, height/2]
+    iconSize:[w,h],
+    iconAnchor:[w,h/2]
   });
 }
 
 
-// ---------------- UTILS ----------------
-function lerp(a,b,t){ return a+(b-a)*t; }
+// ---------- TRIP CACHE ----------
+const tripCache=new Map();
 
-function interp(p1,p2,t){
-  return [
-    lerp(p1[0],p2[0],t),
-    lerp(p1[1],p2[1],t)
-  ];
-}
+async function fetchTrip(trip_id){
 
-function shortestAngle(from,to){
-  let delta = to-from;
-  while(delta > 180) delta -= 360;
-  while(delta < -180) delta += 360;
-  return from + delta;
-}
-
-
-// ---------------- PATTERN CACHE ----------------
-const patternCache = new Map();
-
-async function fetchPattern(pattern_id){
-
-  if(!pattern_id)
-    return {headsign:"", paragens:[]};
-
-  if(patternCache.has(pattern_id))
-    return patternCache.get(pattern_id);
+  if(!trip_id) return {headsign:"",stops:[]};
+  if(tripCache.has(trip_id))
+    return tripCache.get(trip_id);
 
   try{
 
-    const res = await fetch(
-      `https://api.carrismetropolitana.pt/v2/patterns/${pattern_id}`
+    const res=await fetch(
+    `https://api.carrismetropolitana.pt/v2/trips/${trip_id}`
     );
 
-    const data = await res.json();
+    const data=await res.json();
 
-    // ✅ ESTRUTURA CORRETA
-    const paragens = (data.stops || [])
-      .map(s => s.stop)
+    const stops=(data.stop_times||[])
+      .map(s=>s.stop)
       .filter(Boolean);
 
-    const headsign =
+    const headsign=
       data.headsign ||
-      (paragens.length ? paragens[paragens.length-1].name : "");
+      (stops.length?stops[stops.length-1].name:"");
 
-    const info = {
-      headsign,
-      paragens
-    };
+    const info={headsign,stops};
 
-    patternCache.set(pattern_id, info);
+    tripCache.set(trip_id,info);
     return info;
 
-  } catch(e){
-    console.error("Erro pattern:", e);
-    return {headsign:"", paragens:[]};
+  }catch(e){
+    console.log("Erro trip:",e);
+    return {headsign:"",stops:[]};
   }
 }
 
 
-// ---------------- VEHICLES ----------------
-const markers = new Map();
+// ---------- VEHICLES ----------
+const markers=new Map();
 
-async function updateVehicles(){
+async function update(){
 
-  try{
+  const vehicles=await fetch(
+  "https://api.carrismetropolitana.pt/v2/vehicles"
+  ).then(r=>r.json());
 
-    const vehicles = await fetch(
-      "https://api.carrismetropolitana.pt/v2/vehicles"
-    ).then(r=>r.json());
+  vehicles.forEach(async v=>{
 
-    vehicles.forEach(async v=>{
+    if(!v.lat||!v.lon) return;
 
-      if(v.lat == null || v.lon == null)
-        return;
+    const trip=await fetchTrip(v.trip_id);
 
-      const angle = v.bearing || 0;
+    const popup=`
+    <b>Linha:</b> ${v.line_id}<br>
+    <b>Destino:</b> ${trip.headsign}<br>
+    <b>Velocidade:</b> ${v.speed?Math.round(v.speed*3.6):0} km/h<br>
+    <b>Estado:</b> ${v.current_status}<br><br>
+    <b>Próximas paragens:</b><br>
+    ${trip.stops.slice(0,5).map(s=>s.name).join("<br>")}
+    `;
 
-      const {headsign, paragens} =
-        await fetchPattern(v.pattern_id);
+    if(!markers.has(v.id)){
 
-      const popup = `
-        🚌 <b>Linha:</b> ${v.line_id || "?"}<br>
-        <b>Destino:</b> ${headsign}<br>
-        <b>Velocidade:</b> ${v.speed ? Math.round(v.speed*3.6) : 0} km/h<br>
-        <b>Estado:</b> ${v.current_status}<br>
-        <br><b>Próximas paragens:</b><br>
-        ${paragens.slice(0,5).map(p=>p.name).join("<br>")}
-      `;
+      const marker=L.marker([v.lat,v.lon],{
+        icon:createBusIcon(v.line_id),
+        rotationAngle:v.bearing||0,
+        rotationOrigin:"center center"
+      }).addTo(map);
 
-      if(!markers.has(v.id)){
+      marker.bindPopup(popup);
 
-        const icon = createBusIcon(v.line_id || "?");
+      markers.set(v.id,marker);
 
-        const marker = L.marker([v.lat, v.lon], {
-          icon,
-          rotationAngle: angle,
-          rotationOrigin: "center center"
-        }).addTo(map);
+    }else{
 
-        marker.bindPopup(popup);
-
-        markers.set(v.id,{
-          marker,
-          pos:[v.lat,v.lon],
-          ang:angle,
-          anim:null
-        });
-
-      } else {
-
-        const obj = markers.get(v.id);
-        obj.marker._popup.setContent(popup);
-
-        smoothMove(obj, [v.lat,v.lon], angle);
-      }
-
-    });
-
-  } catch(e){
-    console.error("Erro vehicles:", e);
-  }
-}
-
-
-// ---------------- SMOOTH MOVE ----------------
-function smoothMove(obj,newPos,newAng,duration=30000){
-
-  const start = performance.now();
-  const fromPos = obj.pos.slice();
-  const fromAng = obj.ang;
-  const targetAng = shortestAngle(fromAng,newAng);
-
-  if(obj.anim)
-    cancelAnimationFrame(obj.anim);
-
-  function frame(ts){
-
-    const t = Math.min((ts-start)/duration,1);
-
-    const pos = interp(fromPos,newPos,t);
-    const ang = lerp(fromAng,targetAng,t);
-
-    obj.marker.setLatLng(pos);
-    obj.marker.setRotationAngle(ang);
-
-    if(t<1){
-      obj.anim = requestAnimationFrame(frame);
-    } else {
-      obj.pos = newPos;
-      obj.ang = newAng;
+      const m=markers.get(v.id);
+      m.setLatLng([v.lat,v.lon]);
+      m.setRotationAngle(v.bearing||0);
+      m.getPopup().setContent(popup);
     }
-  }
 
-  obj.anim = requestAnimationFrame(frame);
+  });
 }
 
-
-// ---------------- START ----------------
-updateVehicles();
-setInterval(updateVehicles,30000);
+update();
+setInterval(update,30000);
 
 </script>
 </body>
