@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Autocarros Carris em Tempo Real</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { width: 100%; height: 100%; }
+
+    /* Ícones de autocarro */
+    .bus-container {
+      position: relative;
+      width: 50px;
+      height: 50px;
+      transform-origin: center;
+    }
+
+    .bus-diamond {
+      width: 40px;
+      height: 40px;
+      background: #FFD100; /* amarelo */
+      transform: rotate(45deg);
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bus-diamond span {
+      transform: rotate(-45deg);
+      color: black; /* letras pretas */
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .bus-arrow {
+      position: absolute;
+      top: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 10px solid black;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  // Inicializa mapa
+  const map = L.map('map').setView([38.72, -9.14], 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  let markers = [];
+
+  // Função para criar ícone
+  function createBusIcon(route, bearing) {
+    return L.divIcon({
+      className: "bus-wrapper",
+      html: `
+        <div class="bus-container" style="transform: rotate(${bearing}deg)">
+          <div class="bus-diamond">
+            <span>${route}</span>
+          </div>
+          <div class="bus-arrow"></div>
+        </div>
+      `,
+      iconSize: [50, 50],
+      iconAnchor: [25, 25]
+    });
+  }
+
+  // Função para buscar dados da API
+  async function fetchBuses() {
+    try {
+      const res = await fetch("https://api.carrismetropolitana.pt/vehicles");
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error("Erro ao buscar dados da API:", err);
+      return [];
+    }
+  }
+
+  // Atualiza os marcadores no mapa
+  async function updateBuses() {
+    const buses = await fetchBuses();
+
+    // Remove marcadores antigos
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    // Adiciona novos
+    buses.forEach(bus => {
+      if(bus.lat && bus.lon && bus.route_short_name) {
+        const marker = L.marker(
+          [bus.lat, bus.lon],
+          { icon: createBusIcon(bus.route_short_name, bus.bearing || 0) }
+        ).addTo(map);
+
+        // Popup com info
+        marker.bindPopup(`
+          <b>Rota:</b> ${bus.route_short_name}<br>
+          <b>Destino:</b> ${bus.destination || "N/A"}<br>
+          <b>Velocidade:</b> ${bus.speed || 0} km/h
+        `);
+
+        markers.push(marker);
+      }
+    });
+  }
+
+  // Inicial
+  updateBuses();
+  // Atualiza a cada 10s
+  setInterval(updateBuses, 10000);
+</script>
+
+</body>
+</html>
