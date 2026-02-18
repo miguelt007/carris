@@ -126,7 +126,7 @@ function lerPopup(v){
 // ---------------- MARKERS ----------------
 const markers = new Map();
 
-// interpolação suave de posição e bearing
+// interpolação suave de posição e bearing (bearing gira pelo caminho mais curto)
 function moveMarker(marker, newLatLng, newBearing, duration = 28000){
   if(!marker._latlng) return;
   const start = marker.getLatLng();
