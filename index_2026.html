@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Carris Metropolitana – Live</title>
+<title>Carris Metropolitana – Teste Mock</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
@@ -29,7 +29,7 @@ html, body { margin:0; height:100%; font-family: Arial, sans-serif; }
 <body>
 
 <div id="header">
-  <span class="live-indicator"></span> Carris Metropolitana – Live
+  <span class="live-indicator"></span> Carris Metropolitana – Teste Mock
 </div>
 <div id="map"></div>
 <button id="botao-centro">&#9673;</button>
@@ -71,42 +71,12 @@ function createBusSVGIcon(line){
   });
 }
 
-// Função utilitária para status
-function traduzirStatus(status){
-  switch(status){
-    case "INCOMING_AT": return "A chegar à paragem";
-    case "STOPPED_AT": return "Parado na paragem";
-    case "IN_TRANSIT_TO": return "Em trânsito";
-    default: return "Desconhecido";
-  }
-}
-
-// Cache de percursos
-const cachePatterns = new Map();
-async function obterInfoPercurso(pattern_id){
-  if(!pattern_id) return {headsign:"não disponível",paragens:[]};
-  if(cachePatterns.has(pattern_id)) return cachePatterns.get(pattern_id);
-  try{
-    const res = await fetch(`https://api.carrismetropolitana.pt/patterns/${pattern_id}`);
-    if(!res.ok) throw new Error();
-    const dados = await res.json();
-    const headsign = dados?.headsign||"não disponível";
-    const path = dados?.path||[];
-    const paragens = path.map(p=>p.stop?.name).filter(Boolean).slice(0,5);
-    const info={headsign,paragens};
-    cachePatterns.set(pattern_id,info);
-    return info;
-  }catch{return {headsign:"não disponível",paragens:[]};}
-}
-
 // Marcadores existentes
 const marcadoresBuses = new Map();
 
 // Interpolação linear
 function lerp(a,b,t){ return a + (b-a)*t; }
-function interpolateLatLng(latlng1, latlng2, t){
-  return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)];
-}
+function interpolateLatLng(latlng1, latlng2, t){ return [lerp(latlng1[0],latlng2[0],t), lerp(latlng1[1],latlng2[1],t)]; }
 
 // Animação do marcador
 function animateMarker(mObj, newPos, newAngle, duration=30000){
@@ -129,44 +99,55 @@ function animateMarker(mObj, newPos, newAngle, duration=30000){
   mObj.animFrame = requestAnimationFrame(frame);
 }
 
-// Carregar autocarros com animação suave
+// Dados simulados
+let testVehicles = [
+  {id:"1",line_id:"4701",lat:38.7369,lon:-9.1426,bearing:90,current_status:"IN_TRANSIT_TO",pattern_id:"4701_0_2"},
+  {id:"2",line_id:"7301",lat:38.7400,lon:-9.1500,bearing:180,current_status:"IN_TRANSIT_TO",pattern_id:"7301_0_1"},
+  {id:"3",line_id:"7901",lat:38.7300,lon:-9.1350,bearing:270,current_status:"IN_TRANSIT_TO",pattern_id:"7901_0_1"}
+];
+
+// Atualiza posições de teste a cada 30s
+function moveMockVehicles(){
+  testVehicles.forEach(v=>{
+    v.lat += (Math.random()-0.5)*0.001;
+    v.lon += (Math.random()-0.5)*0.001;
+    v.bearing = (v.bearing + Math.floor(Math.random()*20-10)) % 360;
+  });
+}
+
+// Carregar "autocarros" de teste
 async function carregarAutocarros(){
-  try{
-    const veiculos = await fetch('https://api.carrismetropolitana.pt/vehicles').then(r=>r.json());
-    if(!veiculos || !Array.isArray(veiculos)) return;
+  moveMockVehicles();
+  testVehicles.forEach(v=>{
+    const {id, line_id, lat, lon, bearing, current_status, pattern_id} = v;
+    const headsign = "Teste destino";
+    const paragens = ["Paragem A","Paragem B","Paragem C"];
+    const estado = traduzirStatus(current_status);
+    const horaAtual = new Date().toLocaleTimeString("pt-PT",{hour12:false});
 
-    veiculos.forEach(async v=>{
-      if(!v.lat || !v.lon) return;
-      const {lat, lon, id, line_id, bearing, current_status, pattern_id} = v;
-      const {headsign, paragens} = await obterInfoPercurso(pattern_id);
-      const estado = traduzirStatus(current_status);
-      const horaAtual = new Date().toLocaleTimeString("pt-PT",{hour12:false});
+    const popupHTML = `
+      🚌 <strong>Autocarro ${id}</strong><br>
+      <b>Linha:</b> ${line_id}<br>
+      <b>Destino:</b> ${headsign}<br>
+      <b>Estado:</b> ${estado}<br>
+      <b>Atualização:</b> ${horaAtual}<br>
+      <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
+    `;
 
-      const popupHTML = `
-        🚌 <strong>Autocarro ${id}</strong><br>
-        <b>Linha:</b> ${line_id}<br>
-        <b>Destino:</b> ${headsign}<br>
-        <b>Estado:</b> ${estado}<br>
-        <b>Atualização:</b> ${horaAtual}<br>
-        <br><strong>Próximas paragens:</strong><br>${paragens.join('<br>')}
-      `;
-
-      if(marcadoresBuses.has(id)){
-        const mObj = marcadoresBuses.get(id);
-        mObj.marker._popup.setContent(popupHTML);
-        animateMarker(mObj, [lat, lon], bearing||0, 30000);
-      } else {
-        const marker = L.marker([lat, lon], {
-          icon: createBusSVGIcon(line_id),
-          rotationAngle: bearing||0,
-          rotationOrigin:'center'
-        }).addTo(map);
-        marker.bindPopup(popupHTML);
-        marcadoresBuses.set(id,{marker, currentPos:[lat,lon], currentAngle:bearing||0, animFrame:null});
-      }
-    });
-
-  }catch(err){ console.error('Erro ao carregar veículos:', err); }
+    if(marcadoresBuses.has(id)){
+      const mObj = marcadoresBuses.get(id);
+      mObj.marker._popup.setContent(popupHTML);
+      animateMarker(mObj, [lat, lon], bearing||0, 30000);
+    } else {
+      const marker = L.marker([lat, lon], {
+        icon: createBusSVGIcon(line_id),
+        rotationAngle: bearing||0,
+        rotationOrigin:'center'
+      }).addTo(map);
+      marker.bindPopup(popupHTML);
+      marcadoresBuses.set(id,{marker, currentPos:[lat,lon], currentAngle:bearing||0, animFrame:null});
+    }
+  });
 }
 
 // Inicializa e atualiza a cada 30s
